@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CCNA Network Blueprint</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Exo+2:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #020b14;
+    --neon-blue: #00c8ff;
+    --neon-cyan: #00ffe7;
+    --neon-green: #39ff6a;
+    --neon-orange: #ff8c00;
+    --neon-purple: #bb66ff;
+    --neon-yellow: #ffe600;
+    --panel: rgba(0,20,40,0.92);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background: var(--bg);
+    font-family: 'Exo 2', sans-serif;
+    color: #fff;
+    overflow: hidden;
+    width: 100vw;
+    height: 100vh;
+  }
+  /* Z-INDEX STACK:
+     0 = bg canvas (grid dots)        pointer-events: none
+     1 = particle canvas              pointer-events: none
+     2 = SVG diagram                  pointer-events: all
+    10 = all UI overlays              pointer-events: all (per element)
+  */
+  #canvas-bg        { position:fixed; inset:0; z-index:0; pointer-events:none; }
+  #canvas-particles { position:fixed; inset:0; z-index:1; pointer-events:none; }
+  #diagram-svg      { position:fixed; inset:0; z-index:2; width:100%; height:100%; cursor:grab; }
+  #diagram-svg.drag { cursor:grabbing; }
+
+  /* HUD */
+  #hud { position:fixed; top:0; left:0; right:0; z-index:10;
+    padding:10px 22px; display:flex; align-items:center; justify-content:space-between;
+    background:linear-gradient(to bottom,rgba(2,11,20,0.98),transparent); pointer-events:none; }
+  .hud-sm { font-family:'Share Tech Mono',monospace; font-size:9px; letter-spacing:3px; color:var(--neon-cyan); }
+  .hud-lg { font-size:19px; font-weight:900;
+    background:linear-gradient(90deg,var(--neon-blue),var(--neon-cyan));
+    -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+  .hud-hint { font-family:'Share Tech Mono',monospace; font-size:9px; color:rgba(0,200,255,0.45); text-align:center; line-height:1.6; }
+  .hud-ok { font-family:'Share Tech Mono',monospace; font-size:9px; color:var(--neon-green); letter-spacing:2px; }
+
+  /* Layer toggles */
+  #layers { position:fixed; top:66px; left:14px; z-index:10; display:flex; flex-direction:column; gap:5px; }
+  .lbtn { padding:5px 12px; border-radius:20px; cursor:pointer;
+    font-family:'Share Tech Mono',monospace; font-size:9px; letter-spacing:2px;
+    border:1px solid transparent; transition:all .2s; text-transform:uppercase;
+    background:rgba(0,0,0,0.55); user-select:none; }
+  .lbtn.on  { border-color:currentColor; background:rgba(255,255,255,0.07); }
+  .lbtn.off { opacity:.28; }
+
+  /* Info panel */
+  #panel { position:fixed; top:66px; right:14px; z-index:10; width:285px;
+    background:var(--panel); border:1px solid rgba(0,200,255,0.28); border-radius:10px;
+    padding:15px; backdrop-filter:blur(16px); display:none; }
+  #panel.show { display:block; }
+  #panel .pl { font-family:'Share Tech Mono',monospace; font-size:8px;
+    letter-spacing:3px; opacity:.45; margin-bottom:3px; text-transform:uppercase; }
+  #panel .pt { font-size:14px; font-weight:700; margin-bottom:11px; }
+  #panel .pb { font-size:11px; line-height:1.85; color:rgba(255,255,255,.72); }
+  #panel .pb b { font-weight:600; }
+  #panel .pc { margin-top:10px; padding:9px; background:rgba(0,0,0,.5); border-radius:6px;
+    border-left:2px solid var(--neon-green);
+    font-family:'Share Tech Mono',monospace; font-size:9px; color:var(--neon-green);
+    line-height:1.9; white-space:pre-wrap; word-break:break-all; }
+  #pclose { position:absolute; top:9px; right:11px; background:none; border:none;
+    color:rgba(255,255,255,.32); font-size:15px; cursor:pointer; line-height:1; }
+  #pclose:hover { color:#fff; }
+
+  /* Legend */
+  #legend { position:fixed; bottom:14px; left:14px; z-index:10;
+    background:var(--panel); border:1px solid rgba(0,200,255,.16);
+    border-radius:8px; padding:9px 13px; backdrop-filter:blur(12px); pointer-events:none; }
+  #legend h4 { font-family:'Share Tech Mono',monospace; font-size:8px;
+    letter-spacing:3px; color:var(--neon-cyan); margin-bottom:6px; }
+  .lr { display:flex; align-items:center; gap:7px; margin-bottom:3px;
+    font-size:10px; color:rgba(255,255,255,.48); }
+  .ld { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+
+  /* Zoom */
+  #zoom { position:fixed; bottom:14px; right:14px; z-index:10; display:flex; flex-direction:column; gap:5px; }
+  .zb { width:36px; height:36px; background:var(--panel);
+    border:1px solid rgba(0,200,255,.2); border-radius:6px;
+    color:var(--neon-cyan); font-size:18px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    backdrop-filter:blur(8px); transition:all .2s; }
+  .zb:hover { background:rgba(0,200,255,.12); border-color:var(--neon-cyan); }
+
+  @keyframes flow { to { stroke-dashoffset:-30; } }
+</style>
+</head>
+<body>
+
+<canvas id="canvas-bg"></canvas>
+<canvas id="canvas-particles"></canvas>
+
+<svg id="diagram-svg" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="ag" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3z" fill="rgba(57,255,106,.8)"/></marker>
+    <marker id="ab" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3z" fill="rgba(0,200,255,.8)"/></marker>
+    <marker id="ao" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3z" fill="rgba(255,140,0,.8)"/></marker>
+    <marker id="ap" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3z" fill="rgba(187,102,255,.8)"/></marker>
+    <marker id="ac" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3z" fill="rgba(0,255,231,.8)"/></marker>
+    <marker id="ay" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3z" fill="rgba(255,230,0,.8)"/></marker>
+  </defs>
+  <g id="world">
+    <g id="gl"></g>
+    <g id="gn"></g>
+  </g>
+</svg>
+
+<!-- UI -->
+<div id="hud">
+  <div><div class="hud-sm">CCNA 200-301 · Network Architecture</div><div class="hud-lg">DIGITAL BLUEPRINT</div></div>
+  <div class="hud-hint">CLICK ANY NODE FOR DETAILS<br>DRAG TO PAN · SCROLL TO ZOOM</div>
+  <div class="hud-ok">● ALL LAYERS ACTIVE</div>
+</div>
+
+<div id="layers">
+  <div class="lbtn on" style="color:var(--neon-orange)"  data-l="physical">PHY LAYER</div>
+  <div class="lbtn on" style="color:var(--neon-blue)"   data-l="datalink">DATA LINK</div>
+  <div class="lbtn on" style="color:var(--neon-green)"  data-l="network">NETWORK</div>
+  <div class="lbtn on" style="color:var(--neon-purple)" data-l="security">SECURITY</div>
+  <div class="lbtn on" style="color:var(--neon-cyan)"   data-l="wireless">WIRELESS</div>
+  <div class="lbtn on" style="color:var(--neon-yellow)" data-l="automation">AUTOMATION</div>
+</div>
+
+<div id="panel">
+  <button id="pclose">✕</button>
+  <div class="pl" id="pl"></div>
+  <div class="pt" id="pt"></div>
+  <div class="pb" id="pb"></div>
+  <div class="pc" id="pc"></div>
+</div>
+
+<div id="legend">
+  <h4>LAYER LEGEND</h4>
+  <div class="lr"><div class="ld" style="background:var(--neon-orange)"></div>Physical (L1)</div>
+  <div class="lr"><div class="ld" style="background:var(--neon-blue)"></div>Data Link (L2)</div>
+  <div class="lr"><div class="ld" style="background:var(--neon-green)"></div>Network (L3)</div>
+  <div class="lr"><div class="ld" style="background:var(--neon-purple)"></div>Security</div>
+  <div class="lr"><div class="ld" style="background:var(--neon-cyan)"></div>Wireless</div>
+  <div class="lr"><div class="ld" style="background:var(--neon-yellow)"></div>Automation</div>
+</div>
+
+<div id="zoom">
+  <button class="zb" id="bzi">+</button>
+  <button class="zb" id="bzo">−</button>
+  <button class="zb" id="bzr">⌖</button>
+</div>
+
+<script>
+// ── DATA ──────────────────────────────────────────────────────────
+const N = [
+  {id:'internet', x:0,   y:0,   r:54, ly:'network',    c:'#00c8ff', ic:'🌐', lb:'INTERNET',  sb:'WAN / BGP',
+   i:{l:'NETWORK LAYER (L3)',t:'Internet / WAN Edge',
+      b:'The <b>public internet</b> sits at the edge. Traffic leaving your LAN is <b>NATted</b> to a public IP and routed between ISPs via <b>BGP</b>.<br><br>• BGP = path-vector protocol between Autonomous Systems<br>• ISP provides default route 0.0.0.0/0<br>• DNS translates domain names to IPs<br>• Public IP assigned by ISP (static or DHCP)',
+      c:'ip route 0.0.0.0 0.0.0.0 [ISP-GW]\nshow ip route\nping 8.8.8.8\ntraceroute 8.8.8.8'}},
+
+  {id:'cable',  x:-400,y:-240,r:36,ly:'physical',  c:'#ff8c00',ic:'🔌',lb:'CABLING', sb:'Cat6 / Fiber',
+   i:{l:'PHYSICAL LAYER (L1)',t:'Network Cabling',
+      b:'<b>No cable = no network.</b> Right media choice matters.<br><br>• <b>UTP Cat5e:</b> 1Gbps / 100m max<br>• <b>UTP Cat6:</b> 10Gbps short-range, 1Gbps 100m<br>• <b>MMF Fiber (OM3):</b> 10Gbps / 550m<br>• <b>SMF Fiber:</b> 10Gbps+ / km range<br><br><b>Straight-through:</b> unlike devices (PC→Switch)<br><b>Crossover:</b> like devices (Switch→Switch)<br><b>Auto-MDIX</b> handles this automatically on modern gear',
+      c:'show interfaces GigabitEthernet0/0\nshow interfaces status\nshow interfaces counters errors'}},
+
+  {id:'sfp',    x:-400,y:-150,r:30,ly:'physical',  c:'#ff8c00',ic:'💡',lb:'SFP',     sb:'Transceivers',
+   i:{l:'PHYSICAL LAYER (L1)',t:'SFP Transceivers',
+      b:'<b>Small Form-factor Pluggable</b> modules convert electrical to optical signals.<br><br>• <b>SFP (1G):</b> 1000BASE-SX (MMF), 1000BASE-LX (SMF)<br>• <b>SFP+ (10G):</b> 10GBASE-SR, 10GBASE-LR<br>• <b>QSFP28 (100G):</b> high-density data center uplinks<br><br>Hot-swappable — no device power-down needed',
+      c:'show inventory\nshow interfaces transceiver\nshow interfaces Gi0/1 status'}},
+
+  {id:'rack',   x:-400,y:-60, r:34,ly:'physical',  c:'#ff8c00',ic:'🗄️',lb:'RACK',    sb:'Infrastructure',
+   i:{l:'PHYSICAL LAYER (L1)',t:'Physical Infrastructure',
+      b:'The <b>rack</b> houses all equipment. Good physical design prevents problems before they start.<br><br>• <b>UPS:</b> uninterruptible power supply<br>• <b>Hot/cold aisle:</b> airflow cooling separation<br>• <b>Patch panels:</b> organized cable termination<br>• <b>Console server:</b> out-of-band (OOB) access<br>• <b>PDU:</b> power distribution with monitoring',
+      c:'line console 0\n  logging synchronous\n  exec-timeout 5 0\n  transport input all'}},
+
+  {id:'swa',    x:-210,y:200, r:46,ly:'datalink',  c:'#00c8ff',ic:'🔀',lb:'ACCESS SW',sb:'L2 / VLANs / PoE',
+   i:{l:'DATA LINK LAYER (L2)',t:'Access Layer Switch',
+      b:'<b>Access switches</b> connect end devices and enforce VLAN membership and security policies.<br><br>• Access ports = single VLAN per port<br>• Trunk uplinks to distribution switch<br>• <b>PortFast</b> + <b>BPDU Guard</b> on all access ports<br>• <b>Port security:</b> limit MACs, set violation action<br>• <b>DHCP Snooping:</b> block rogue DHCP servers<br>• <b>802.1X:</b> per-port user authentication',
+      c:'interface range Fa0/1-24\n  switchport mode access\n  switchport access vlan 10\n  spanning-tree portfast\n  spanning-tree bpduguard enable\n  switchport port-security maximum 2\n  switchport port-security violation restrict'}},
+
+  {id:'swd',    x:0,   y:180, r:46,ly:'datalink',  c:'#00c8ff',ic:'🔁',lb:'DIST SW', sb:'L3 / SVI / HSRP',
+   i:{l:'DATA LINK + NETWORK (L2/L3)',t:'Distribution Layer Switch',
+      b:'<b>Distribution switches</b> aggregate access traffic and route between VLANs via SVIs.<br><br>• <b>ip routing</b> enables Layer 3 forwarding<br>• <b>SVI</b> (interface vlan X) = default gateway per VLAN<br>• EtherChannel uplinks to core<br>• Acts as STP root bridge for access VLANs<br>• <b>HSRP/VRRP</b> for gateway redundancy',
+      c:'ip routing\ninterface vlan 10\n  ip address 192.168.10.1 255.255.255.0\ninterface vlan 20\n  ip address 192.168.20.1 255.255.255.0\nip route 0.0.0.0 0.0.0.0 10.0.0.1\nshow ip route'}},
+
+  {id:'stp',    x:-110,y:320, r:32,ly:'datalink',  c:'#00c8ff',ic:'🌳',lb:'STP/RSTP',sb:'Loop Prevention',
+   i:{l:'DATA LINK LAYER (L2)',t:'Spanning Tree Protocol',
+      b:'<b>STP</b> prevents L2 loops by blocking redundant paths. One logical tree per VLAN (PVST+).<br><br><b>Election process:</b><br>1. Root Bridge = lowest Bridge ID (priority + MAC)<br>2. Root Port = best path to root on each non-root switch<br>3. Designated Port = forwarding port per segment<br>4. All others = Blocking<br><br><b>RSTP (802.1w)</b> converges in under 1 second vs 30-50s classic STP',
+      c:'spanning-tree mode rapid-pvst\nspanning-tree vlan 10 priority 4096\nshow spanning-tree vlan 10\nshow spanning-tree summary'}},
+
+  {id:'etha',   x:110, y:320, r:32,ly:'datalink',  c:'#00c8ff',ic:'⚡',lb:'ETHER-\nCHAN',sb:'LACP / PAgP',
+   i:{l:'DATA LINK LAYER (L2)',t:'EtherChannel (Link Aggregation)',
+      b:'<b>EtherChannel</b> bundles up to 8 physical links into one logical interface — more bandwidth and redundancy.<br><br>• <b>LACP (802.3ad):</b> active/passive — open standard (use this)<br>• <b>PAgP:</b> desirable/auto — Cisco proprietary<br><br>All member ports must match: speed, duplex, VLAN config, trunk settings. Load balanced by src/dst MAC or IP hash.',
+      c:'interface range Gi0/1-2\n  channel-group 1 mode active\ninterface port-channel 1\n  switchport mode trunk\nshow etherchannel summary'}},
+
+  {id:'router', x:210, y:0,   r:48,ly:'network',   c:'#39ff6a',ic:'📡',lb:'ROUTER',  sb:'Gateway / NAT',
+   i:{l:'NETWORK LAYER (L3)',t:'Edge Router',
+      b:'The <b>edge router</b> connects LAN to WAN, runs NAT/PAT, and is the last hop before the internet.<br><br>• <b>NAT/PAT:</b> private → public IP translation<br>• <b>Default route:</b> 0.0.0.0/0 toward ISP<br>• <b>DHCP server</b> for internal hosts<br>• <b>ACLs</b> for stateless packet filtering<br>• <b>QoS</b> marks and prioritizes traffic classes',
+      c:'ip nat inside source list 1 interface Gi0/0 overload\naccess-list 1 permit 192.168.0.0 0.0.255.255\nip route 0.0.0.0 0.0.0.0 203.0.113.1\nshow ip nat translations\nshow ip route'}},
+
+  {id:'ospf',   x:330, y:-120,r:36,ly:'network',   c:'#39ff6a',ic:'🗺️',lb:'OSPF',    sb:'Link-State IGP',
+   i:{l:'NETWORK LAYER (L3)',t:'OSPF Routing Protocol',
+      b:'<b>Open Shortest Path First</b> — link-state, uses Dijkstra SPF algorithm. Admin Distance = 110.<br><br><b>Process:</b><br>1. Form neighbor adjacency (Hello packets)<br>2. Exchange LSAs → build identical LSDB on all routers<br>3. Run SPF → install best routes in RIB<br><br><b>DR/BDR election</b> on broadcast segments (highest priority wins, then highest RID)<br><b>Area 0</b> = backbone; all other areas must connect to it',
+      c:'router ospf 1\n  router-id 1.1.1.1\n  network 10.0.0.0 0.0.0.255 area 0\n  passive-interface default\n  no passive-interface Gi0/0\nshow ip ospf neighbor\nshow ip ospf database'}},
+
+  {id:'bgp',    x:330, y:120, r:36,ly:'network',   c:'#39ff6a',ic:'🛣️',lb:'BGP',     sb:'Path-Vector / ISP',
+   i:{l:'NETWORK LAYER (L3)',t:'BGP — Border Gateway Protocol',
+      b:'<b>BGP</b> routes traffic between Autonomous Systems — it is the routing protocol of the internet.<br><br>• <b>eBGP:</b> between different ASes — AD 20<br>• <b>iBGP:</b> within same AS — AD 200<br><br><b>Best path selection order:</b><br>Weight → Local Preference → Locally Originated → AS Path → Origin → MED → eBGP over iBGP → IGP metric',
+      c:'router bgp 65000\n  neighbor 203.0.113.1 remote-as 65001\n  network 198.51.100.0 mask 255.255.255.0\nshow ip bgp summary\nshow ip bgp\nshow ip bgp 0.0.0.0'}},
+
+  {id:'nat',    x:200, y:-180,r:33,ly:'network',   c:'#39ff6a',ic:'🔄',lb:'NAT/PAT', sb:'Address Translation',
+   i:{l:'NETWORK LAYER (L3)',t:'NAT / PAT',
+      b:'<b>NAT</b> translates private IPs to public. <b>PAT</b> (overload) maps many private IPs to one public IP using unique port numbers.<br><br>• <b>Static NAT:</b> 1:1 permanent mapping (public servers)<br>• <b>Dynamic NAT:</b> pool of public IPs<br>• <b>PAT/Overload:</b> many:1 with ports — most common<br><br><b>Inside local</b> = private IP before translation<br><b>Inside global</b> = public IP after translation',
+      c:'ip nat inside source list 1 int Gi0/0 overload\ninterface Gi0/0\n  ip nat outside\ninterface Gi0/1\n  ip nat inside\nshow ip nat translations\ndebug ip nat'}},
+
+  {id:'dhcp',   x:-60, y:-200,r:31,ly:'network',   c:'#39ff6a',ic:'📋',lb:'DHCP',    sb:'IP Assignment',
+   i:{l:'NETWORK LAYER (L3)',t:'DHCP',
+      b:'<b>Dynamic Host Configuration Protocol</b> — automatically hands out IP, mask, gateway, DNS to hosts.<br><br><b>DORA process:</b><br>1. <b>Discover</b> — client broadcasts (255.255.255.255)<br>2. <b>Offer</b> — server proposes IP lease<br>3. <b>Request</b> — client requests offered IP<br>4. <b>Acknowledge</b> — server confirms assignment<br><br><b>ip helper-address</b> relays DHCP requests across routers',
+      c:'ip dhcp pool LAN\n  network 192.168.1.0 /24\n  default-router 192.168.1.1\n  dns-server 8.8.8.8\n  lease 7\nip dhcp excluded-address 192.168.1.1 192.168.1.20\nshow ip dhcp binding'}},
+
+  {id:'dns',    x:60,  y:-200,r:31,ly:'network',   c:'#39ff6a',ic:'🔍',lb:'DNS',     sb:'Name Resolution',
+   i:{l:'APPLICATION LAYER (L7)',t:'DNS — Domain Name System',
+      b:'<b>DNS</b> resolves hostnames to IP addresses. Uses UDP (and TCP) port 53.<br><br><b>Record types:</b><br>• <b>A:</b> hostname → IPv4 address<br>• <b>AAAA:</b> hostname → IPv6 address<br>• <b>CNAME:</b> alias pointing to another name<br>• <b>MX:</b> mail server for a domain<br>• <b>PTR:</b> reverse lookup (IP → name)',
+      c:'ip domain-name corp.local\nip name-server 8.8.8.8 8.8.4.4\nip host server1 192.168.1.100\nshow hosts'}},
+
+  {id:'fw',     x:-200,y:-200,r:44,ly:'security',  c:'#bb66ff',ic:'🛡️',lb:'FIREWALL',sb:'Stateful / ZBF',
+   i:{l:'SECURITY (L3/L4)',t:'Firewall',
+      b:'<b>Stateful firewalls</b> track connection state — return traffic is automatically permitted. Zone-Based Firewall (ZBF) assigns interfaces to security zones.<br><br><b>Zones:</b><br>• <b>Inside:</b> trusted LAN<br>• <b>Outside:</b> untrusted WAN<br>• <b>DMZ:</b> semi-trusted (public-facing servers)<br><br>Traffic between zones needs an explicit inspect policy. <b>ACLs are stateless</b> — every packet evaluated independently.',
+      c:'zone security INSIDE\nzone security OUTSIDE\nzone-pair security IN-OUT source INSIDE destination OUTSIDE\n  service-policy type inspect ZBF-POLICY\nshow zone-pair security'}},
+
+  {id:'acl',    x:-320,y:-120,r:34,ly:'security',  c:'#bb66ff',ic:'📝',lb:'ACL',     sb:'Packet Filter',
+   i:{l:'SECURITY (L3)',t:'Access Control Lists (ACLs)',
+      b:'<b>ACLs</b> filter packets top-down; first match wins. <b>Implicit deny all</b> at the end of every ACL!<br><br>• <b>Standard (1-99):</b> match source IP only → place near destination<br>• <b>Extended (100-199):</b> src + dst + protocol + port → place near source<br>• <b>Named ACLs:</b> human-readable, supports editing individual entries',
+      c:'ip access-list extended INBOUND\n  permit tcp 10.0.0.0 0.0.0.255 any eq 443\n  permit tcp 10.0.0.0 0.0.0.255 any eq 80\n  deny ip any any log\ninterface Gi0/0\n  ip access-group INBOUND in\nshow ip access-lists'}},
+
+  {id:'vpn',    x:-320,y:0,   r:34,ly:'security',  c:'#bb66ff',ic:'🔐',lb:'VPN',     sb:'IPsec / SSL',
+   i:{l:'SECURITY (L3)',t:'VPN — IPsec / SSL',
+      b:'<b>VPNs</b> encrypt traffic across untrusted networks (internet).<br><br><b>IPsec phases:</b><br>• <b>IKE Phase 1:</b> authenticate peers, build encrypted ISAKMP SA (HAGLE: Hash, Auth, Group, Lifetime, Encrypt)<br>• <b>IKE Phase 2:</b> negotiate IPsec SA for data encryption<br><br>• <b>ESP (proto 50):</b> encrypts + authenticates payload — use this<br>• <b>AH (proto 51):</b> authenticates only, no encryption<br>• <b>Tunnel mode:</b> encrypts entire original packet',
+      c:'crypto isakmp policy 10\n  encryption aes 256\n  authentication pre-share\ncrypto ipsec transform-set TS esp-aes 256 esp-sha-hmac\ncrypto map VPNMAP 10 ipsec-isakmp\n  set peer 203.0.113.1\n  set transform-set TS\nshow crypto session'}},
+
+  {id:'aaa',    x:-320,y:120, r:34,ly:'security',  c:'#bb66ff',ic:'🔑',lb:'AAA',     sb:'TACACS+ / RADIUS',
+   i:{l:'SECURITY',t:'AAA — Authentication, Authorization, Accounting',
+      b:'<b>AAA</b> controls who can access network devices and what they can do on them.<br><br>• <b>RADIUS:</b> UDP 1645/1646, encrypts password only, combines AuthN+AuthZ — good for network access (802.1X)<br>• <b>TACACS+:</b> TCP 49, encrypts full packet, separates AuthN/AuthZ/Accounting — Cisco preferred for device admin<br><br><b>802.1X:</b> port-based authentication via RADIUS server',
+      c:'aaa new-model\naaa authentication login VTY group tacacs+ local\ntacacs server CORP\n  address ipv4 10.0.0.10\n  key SecretKey!\nline vty 0 4\n  login authentication VTY'}},
+
+  {id:'dai',    x:-200,y:300, r:30,ly:'security',  c:'#bb66ff',ic:'⚔️',lb:'DAI',     sb:'ARP Inspection',
+   i:{l:'SECURITY (L2)',t:'DHCP Snooping + Dynamic ARP Inspection',
+      b:'<b>DHCP Snooping</b> builds a binding table (IP ↔ MAC ↔ port). <b>DAI</b> validates ARP against this table — blocking ARP poisoning and MITM attacks.<br><br>• <b>Trusted ports:</b> uplinks, DHCP servers<br>• <b>Untrusted ports:</b> all end-user access ports<br>• Invalid ARP packet → dropped and logged<br><br>Enable DHCP Snooping FIRST — DAI depends on its binding table!',
+      c:'ip dhcp snooping\nip dhcp snooping vlan 10,20\nip arp inspection vlan 10,20\ninterface Gi0/24\n  ip dhcp snooping trust\n  ip arp inspection trust\nshow ip dhcp snooping binding\nshow ip arp inspection vlan 10'}},
+
+  {id:'wlc',    x:0,   y:-300,r:42,ly:'wireless',  c:'#00ffe7',ic:'📶',lb:'WLC',     sb:'Wireless Controller',
+   i:{l:'WIRELESS (CAPWAP)',t:'Wireless LAN Controller (WLC)',
+      b:'The <b>WLC</b> centrally manages all lightweight APs via CAPWAP tunnels. All RF management and roaming decisions happen here.<br><br><b>CAPWAP tunnel ports:</b><br>• <b>UDP 5246:</b> Control plane (config, management)<br>• <b>UDP 5247:</b> Data plane (client traffic)<br><br><b>AP Modes:</b><br>• Local: all traffic tunneled through WLC<br>• FlexConnect: local switching if WLC unreachable<br>• Monitor: passive RF scanning only',
+      c:'config wlan create 1 Corp Corp-SSID\nconfig wlan security wpa akm 802.1x enable 1\nconfig wlan enable 1\nshow wlan summary\nshow ap summary\nshow client summary'}},
+
+  {id:'ap',     x:-110,y:-360,r:34,ly:'wireless',  c:'#00ffe7',ic:'📡',lb:'ACCESS PT',sb:'802.11ax / Wi-Fi 6',
+   i:{l:'WIRELESS (L1/L2)',t:'Wireless Access Point',
+      b:'<b>Lightweight APs</b> handle only the radio functions — all intelligence lives in the WLC.<br><br><b>Standards:</b><br>• 802.11n (Wi-Fi 4): 2.4/5GHz, MIMO, 600Mbps<br>• 802.11ac (Wi-Fi 5): 5GHz, MU-MIMO, 3.5Gbps<br>• 802.11ax (Wi-Fi 6): OFDMA, 2.4/5/6GHz, 9.6Gbps<br><br><b>2.4GHz non-overlapping channels:</b> 1, 6, 11 ONLY<br><b>SNR target:</b> greater than 20 dB for reliable connection',
+      c:'! APs join WLC automatically\nconfig ap name AP-FLOOR1 [mac]\nconfig ap channel 36 AP-FLOOR1\nshow ap config general AP-FLOOR1\nshow ap dot11 24ghz channel'}},
+
+  {id:'wpa',    x:110, y:-360,r:34,ly:'wireless',  c:'#00ffe7',ic:'🔒',lb:'WPA3',    sb:'Wireless Security',
+   i:{l:'WIRELESS SECURITY',t:'Wireless Security Standards',
+      b:'<b>Use WPA2 or WPA3 — never WEP (broken) or WPS (vulnerable).</b><br><br>• <b>WPA2-Personal:</b> Pre-shared key (PSK) + AES-CCMP<br>• <b>WPA2-Enterprise:</b> 802.1X + RADIUS — per-user credentials (best practice)<br>• <b>WPA3-Personal:</b> SAE replaces PSK — resistant to offline brute-force<br>• <b>WPA3-Enterprise:</b> 192-bit security suite<br><br>WPA3 is mandatory for Wi-Fi 6 certification',
+      c:'! On WLC:\nconfig wlan security wpa wpa2 enable 1\nconfig wlan security wpa wpa2 ciphers aes enable 1\nconfig wlan security 802.1x enable 1\nshow rogue ap summary\nshow wlan security 1'}},
+
+  {id:'dnac',   x:200, y:-300,r:42,ly:'automation',c:'#ffe600',ic:'🧬',lb:'DNA CTR', sb:'Intent-Based Mgmt',
+   i:{l:'AUTOMATION / SDN',t:'Cisco DNA Center',
+      b:'<b>Cisco DNA Center</b> is the campus network controller — translates business intent into network configuration automatically.<br><br>• <b>Design:</b> network hierarchy, site templates<br>• <b>Policy:</b> group-based access control (SGTs)<br>• <b>Provision:</b> zero-touch PnP device deployment<br>• <b>Assurance:</b> AI-driven health monitoring + troubleshooting<br><br>Exposes a northbound <b>REST API</b> for integration with apps',
+      c:'# Python - get auth token\nimport requests\nurl = "https://dnac/dna/system/api/v1/auth/token"\nr = requests.post(url, auth=("admin","pass"), verify=False)\ntoken = r.json()["Token"]'}},
+
+  {id:'ansible', x:340,y:-250,r:32,ly:'automation',c:'#ffe600',ic:'⚙️',lb:'ANSIBLE', sb:'Agentless YAML',
+   i:{l:'AUTOMATION',t:'Ansible Network Automation',
+      b:'<b>Ansible</b> is agentless — uses SSH/NETCONF to push configuration via YAML playbooks. No agent installed on devices.<br><br>• <b>Inventory:</b> list of managed devices<br>• <b>Playbook:</b> YAML list of tasks to execute<br>• <b>Module:</b> cisco.ios.ios_config, ios_command<br>• <b>Jinja2 templates:</b> generate dynamic configs<br>• <b>Idempotent:</b> safe to run multiple times without side effects',
+      c:'- name: Push OSPF config\n  hosts: routers\n  tasks:\n    - cisco.ios.ios_config:\n        lines:\n          - network 10.0.0.0 0.0.0.255 area 0\n        parents: router ospf 1'}},
+
+  {id:'rest',    x:340,y:-140,r:32,ly:'automation',c:'#ffe600',ic:'🔗',lb:'REST API', sb:'HTTP / JSON',
+   i:{l:'AUTOMATION / PROGRAMMABILITY',t:'REST API',
+      b:'<b>REST APIs</b> allow programmatic network control via standard HTTP methods and JSON data.<br><br>• <b>GET:</b> retrieve data (read-only, safe)<br>• <b>POST:</b> create a new resource<br>• <b>PUT:</b> replace an existing resource<br>• <b>PATCH:</b> partially update a resource<br>• <b>DELETE:</b> remove a resource<br><br>Common status codes: 200 OK, 201 Created, 400 Bad Request, 401 Unauthorized, 404 Not Found',
+      c:'import requests\nheaders = {\n  "X-Auth-Token": token,\n  "Content-Type": "application/json"\n}\nr = requests.get(\n  "https://dnac/dna/intent/api/v1/network-device",\n  headers=headers, verify=False)\ndevices = r.json()["response"]'}},
+
+  {id:'netconf', x:340,y:-30, r:30,ly:'automation',c:'#ffe600',ic:'📨',lb:'NETCONF', sb:'XML over SSH',
+   i:{l:'AUTOMATION / PROGRAMMABILITY',t:'NETCONF / RESTCONF',
+      b:'<b>NETCONF</b> uses XML over SSH port 830 with YANG data models for structured device management.<br><br><b>Datastores:</b><br>• <b>running:</b> currently active config<br>• <b>candidate:</b> staging area (commit to apply)<br>• <b>startup:</b> config loaded at boot<br><br><b>RESTCONF</b> = REST-flavored NETCONF over HTTP/HTTPS. Both rely on <b>YANG</b> models to define available data.',
+      c:'netconf-yang\nrestconf\nip http secure-server\n# Python ncclient:\nfrom ncclient import manager\nm = manager.connect(host="10.0.0.1",\n  port=830, username="admin",\n  password="cisco")\ncfg = m.get_config(source="running")'}},
+
+  {id:'python',  x:200, y:310, r:34,ly:'automation',c:'#ffe600',ic:'🐍',lb:'PYTHON',  sb:'Netmiko / NAPALM',
+   i:{l:'AUTOMATION',t:'Python Network Automation',
+      b:'<b>Python</b> is the dominant language for network automation scripting and tooling.<br><br><b>Key libraries:</b><br>• <b>Netmiko:</b> SSH connections to Cisco and multi-vendor devices<br>• <b>NAPALM:</b> multi-vendor structured getters (facts, routes, interfaces)<br>• <b>nornir:</b> parallel task execution framework<br>• <b>requests:</b> HTTP/REST API calls<br>• <b>json / yaml:</b> parse API responses and config templates',
+      c:'from netmiko import ConnectHandler\ndevice = {\n  "device_type": "cisco_ios",\n  "host": "10.0.0.1",\n  "username": "admin",\n  "password": "cisco"\n}\nwith ConnectHandler(**device) as conn:\n  out = conn.send_command("show ip route")\n  print(out)'}},
+];
+
+const L = [
+  {a:'cable',   b:'swa',    t:'solid', c:'#ff8c00'},
+  {a:'sfp',     b:'swd',    t:'solid', c:'#ff8c00'},
+  {a:'rack',    b:'swd',    t:'solid', c:'#ff8c00'},
+  {a:'swa',     b:'swd',    t:'trunk', c:'#00c8ff', lb:'802.1Q trunk'},
+  {a:'swd',     b:'router', t:'trunk', c:'#00c8ff'},
+  {a:'stp',     b:'swa',    t:'dashed',c:'#00c8ff'},
+  {a:'etha',    b:'swd',    t:'dashed',c:'#00c8ff'},
+  {a:'router',  b:'internet',t:'flow', c:'#39ff6a', lb:'default route'},
+  {a:'router',  b:'ospf',   t:'flow',  c:'#39ff6a'},
+  {a:'router',  b:'bgp',    t:'flow',  c:'#39ff6a'},
+  {a:'nat',     b:'router', t:'dashed',c:'#39ff6a'},
+  {a:'dhcp',    b:'swd',    t:'dashed',c:'#39ff6a'},
+  {a:'dns',     b:'router', t:'dashed',c:'#39ff6a'},
+  {a:'bgp',     b:'internet',t:'flow', c:'#39ff6a'},
+  {a:'ospf',    b:'swd',    t:'dashed',c:'#39ff6a'},
+  {a:'fw',      b:'router', t:'flow',  c:'#bb66ff', lb:'zone-based'},
+  {a:'acl',     b:'router', t:'dashed',c:'#bb66ff'},
+  {a:'vpn',     b:'internet',t:'flow', c:'#bb66ff', lb:'IPsec tunnel'},
+  {a:'aaa',     b:'fw',     t:'dashed',c:'#bb66ff'},
+  {a:'dai',     b:'swa',    t:'dashed',c:'#bb66ff'},
+  {a:'wlc',     b:'swd',    t:'flow',  c:'#00ffe7', lb:'CAPWAP'},
+  {a:'ap',      b:'wlc',    t:'flow',  c:'#00ffe7'},
+  {a:'wpa',     b:'ap',     t:'dashed',c:'#00ffe7'},
+  {a:'dnac',    b:'router', t:'flow',  c:'#ffe600', lb:'REST API'},
+  {a:'dnac',    b:'swd',    t:'flow',  c:'#ffe600'},
+  {a:'ansible', b:'dnac',   t:'dashed',c:'#ffe600'},
+  {a:'rest',    b:'dnac',   t:'dashed',c:'#ffe600'},
+  {a:'netconf', b:'router', t:'dashed',c:'#ffe600'},
+  {a:'python',  b:'swd',    t:'dashed',c:'#ffe600'},
+];
+
+// ── GRID ──────────────────────────────────────────────────────────
+const bgC = document.getElementById('canvas-bg');
+const bgX = bgC.getContext('2d');
+function drawGrid(){
+  bgC.width=window.innerWidth; bgC.height=window.innerHeight;
+  bgX.strokeStyle='rgba(0,160,255,0.04)'; bgX.lineWidth=1;
+  const s=44;
+  for(let x=0;x<bgC.width;x+=s){bgX.beginPath();bgX.moveTo(x,0);bgX.lineTo(x,bgC.height);bgX.stroke();}
+  for(let y=0;y<bgC.height;y+=s){bgX.beginPath();bgX.moveTo(0,y);bgX.lineTo(bgC.width,y);bgX.stroke();}
+  bgX.fillStyle='rgba(0,180,255,0.1)';
+  for(let x=0;x<bgC.width;x+=s) for(let y=0;y<bgC.height;y+=s){bgX.beginPath();bgX.arc(x,y,1,0,Math.PI*2);bgX.fill();}
+}
+drawGrid();
+
+// ── VIEWPORT ──────────────────────────────────────────────────────
+const svg=document.getElementById('diagram-svg');
+const world=document.getElementById('world');
+let vx=0,vy=0,sc=1,panning=false,ps={x:0,y:0};
+
+function applyVP(){ world.setAttribute('transform',`translate(${vx},${vy}) scale(${sc})`); }
+function resetView(){
+  sc=Math.min(window.innerWidth,window.innerHeight)/1050;
+  vx=window.innerWidth/2; vy=window.innerHeight/2; applyVP();
+}
+resetView();
+
+// Pan — only when NOT clicking a node group
+svg.addEventListener('mousedown',e=>{
+  if(e.target.closest('#gn')) return; // nodes handle their own click
+  panning=true; ps={x:e.clientX-vx,y:e.clientY-vy};
+  svg.classList.add('drag'); e.preventDefault();
+});
+window.addEventListener('mousemove',e=>{ if(!panning) return; vx=e.clientX-ps.x; vy=e.clientY-ps.y; applyVP(); });
+window.addEventListener('mouseup',()=>{ panning=false; svg.classList.remove('drag'); });
+
+svg.addEventListener('wheel',e=>{
+  e.preventDefault();
+  sc=Math.max(0.25,Math.min(3.5,sc*(e.deltaY<0?1.1:0.91))); applyVP();
+},{passive:false});
+
+document.getElementById('bzi').onclick=()=>{ sc=Math.min(3.5,sc*1.2); applyVP(); };
+document.getElementById('bzo').onclick=()=>{ sc=Math.max(0.25,sc*0.82); applyVP(); };
+document.getElementById('bzr').onclick=resetView;
+
+// ── BUILD SVG ─────────────────────────────────────────────────────
+const gl=document.getElementById('gl');
+const gn=document.getElementById('gn');
+const nm={};
+N.forEach(n=>nm[n.id]=n);
+
+const arrowMap={'#39ff6a':'ag','#00c8ff':'ab','#ff8c00':'ao','#bb66ff':'ap','#00ffe7':'ac','#ffe600':'ay'};
+const lpaths=[];
+
+// Links
+L.forEach(lk=>{
+  const a=nm[lk.a],b=nm[lk.b];
+  if(!a||!b) return;
+  const dx=b.x-a.x,dy=b.y-a.y;
+  const cx=(a.x+b.x)/2-dy*0.13, cy=(a.y+b.y)/2+dx*0.13;
+  const d=`M${a.x},${a.y} Q${cx},${cy} ${b.x},${b.y}`;
+  const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+  path.setAttribute('d',d); path.setAttribute('fill','none'); path.setAttribute('stroke',lk.c);
+  path.style.pointerEvents='none';
+  if(lk.t==='solid'){ path.setAttribute('stroke-width','2'); path.setAttribute('stroke-opacity','0.5'); }
+  else if(lk.t==='trunk'){ path.setAttribute('stroke-width','3'); path.setAttribute('stroke-opacity','0.65'); }
+  else if(lk.t==='dashed'){ path.setAttribute('stroke-width','1.5'); path.setAttribute('stroke-opacity','0.42');
+    path.setAttribute('stroke-dasharray','6 5'); path.style.animation=`flow ${1.8+Math.random()*2}s linear infinite`; }
+  else if(lk.t==='flow'){ path.setAttribute('stroke-width','2'); path.setAttribute('stroke-opacity','0.6');
+    path.setAttribute('stroke-dasharray','10 6'); path.style.animation=`flow ${1.2+Math.random()*1.5}s linear infinite`;
+    path.setAttribute('marker-end',`url(#${arrowMap[lk.c]||'ab'})`); }
+  gl.appendChild(path);
+  if(lk.lb){ const t=document.createElementNS('http://www.w3.org/2000/svg','text');
+    t.setAttribute('x',cx); t.setAttribute('y',cy-8); t.setAttribute('text-anchor','middle');
+    t.setAttribute('fill',lk.c); t.setAttribute('font-family','Share Tech Mono,monospace');
+    t.setAttribute('font-size','9'); t.setAttribute('opacity','0.6'); t.style.pointerEvents='none';
+    t.textContent=lk.lb; gl.appendChild(t); }
+  lpaths.push({ax:a.x,ay:a.y,bx:b.x,by:b.y,cx,cy,color:lk.c});
+});
+
+// Nodes
+N.forEach(node=>{
+  const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+  g.setAttribute('data-id',node.id); g.setAttribute('data-layer',node.ly);
+  g.style.cursor='pointer';
+
+  const halo=document.createElementNS('http://www.w3.org/2000/svg','circle');
+  halo.setAttribute('cx',node.x); halo.setAttribute('cy',node.y); halo.setAttribute('r',node.r+10);
+  halo.setAttribute('fill','none'); halo.setAttribute('stroke',node.c); halo.setAttribute('stroke-width','1');
+  halo.setAttribute('opacity','0.17'); halo.style.pointerEvents='none';
+
+  const circ=document.createElementNS('http://www.w3.org/2000/svg','circle');
+  circ.setAttribute('cx',node.x); circ.setAttribute('cy',node.y); circ.setAttribute('r',node.r);
+  circ.setAttribute('fill','rgba(2,11,20,0.9)'); circ.setAttribute('stroke',node.c); circ.setAttribute('stroke-width','2');
+
+  const tint=document.createElementNS('http://www.w3.org/2000/svg','circle');
+  tint.setAttribute('cx',node.x); tint.setAttribute('cy',node.y); tint.setAttribute('r',node.r-3);
+  tint.setAttribute('fill',node.c); tint.setAttribute('fill-opacity','0.07'); tint.style.pointerEvents='none';
+
+  const icon=document.createElementNS('http://www.w3.org/2000/svg','text');
+  icon.setAttribute('x',node.x); icon.setAttribute('y',node.y-node.r*0.15);
+  icon.setAttribute('text-anchor','middle'); icon.setAttribute('dominant-baseline','middle');
+  icon.setAttribute('font-size',node.r>40?'20':'15'); icon.style.pointerEvents='none';
+  icon.textContent=node.ic;
+
+  node.lb.split('\n').forEach((line,i)=>{
+    const t=document.createElementNS('http://www.w3.org/2000/svg','text');
+    t.setAttribute('x',node.x); t.setAttribute('y',node.y+node.r*0.35+i*11);
+    t.setAttribute('text-anchor','middle'); t.setAttribute('fill',node.c);
+    t.setAttribute('font-family','Exo 2,sans-serif'); t.setAttribute('font-weight','700');
+    t.setAttribute('font-size',node.r>40?'10':'8.5'); t.setAttribute('letter-spacing','0.8');
+    t.style.pointerEvents='none'; t.textContent=line; g.appendChild(t);
+  });
+
+  const sub=document.createElementNS('http://www.w3.org/2000/svg','text');
+  sub.setAttribute('x',node.x); sub.setAttribute('y',node.y+node.r+13);
+  sub.setAttribute('text-anchor','middle'); sub.setAttribute('fill','rgba(255,255,255,0.36)');
+  sub.setAttribute('font-family','Share Tech Mono,monospace'); sub.setAttribute('font-size','7.5');
+  sub.style.pointerEvents='none'; sub.textContent=node.sb;
+
+  g.appendChild(halo); g.appendChild(circ); g.appendChild(tint); g.appendChild(icon); g.appendChild(sub);
+
+  g.addEventListener('mouseenter',()=>{ circ.setAttribute('stroke-width','3.5'); halo.setAttribute('opacity','0.38'); tint.setAttribute('fill-opacity','0.16'); });
+  g.addEventListener('mouseleave',()=>{ circ.setAttribute('stroke-width','2'); halo.setAttribute('opacity','0.17'); tint.setAttribute('fill-opacity','0.07'); });
+
+  // CLICK — this is the key fix: stopPropagation prevents panning interference
+  g.addEventListener('click', e=>{
+    e.stopPropagation();
+    document.getElementById('pl').textContent = node.i.l;
+    document.getElementById('pt').textContent = node.i.t;
+    document.getElementById('pt').style.color = node.c;
+    document.getElementById('pb').innerHTML   = node.i.b;
+    document.getElementById('pc').textContent = node.i.c;
+    document.getElementById('panel').classList.add('show');
+  });
+
+  gn.appendChild(g);
+});
+
+// Close panel
+document.getElementById('pclose').addEventListener('click',()=>document.getElementById('panel').classList.remove('show'));
+svg.addEventListener('click',e=>{ if(!e.target.closest('#gn')) document.getElementById('panel').classList.remove('show'); });
+
+// ── LAYER TOGGLES ─────────────────────────────────────────────────
+const activeLayers=new Set(N.map(n=>n.ly));
+document.querySelectorAll('.lbtn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    const ly=btn.dataset.l;
+    if(activeLayers.has(ly)){ activeLayers.delete(ly); btn.classList.replace('on','off'); }
+    else { activeLayers.add(ly); btn.classList.replace('off','on'); }
+    document.querySelectorAll('#gn > g').forEach(g=>{
+      const ok=activeLayers.has(g.dataset.layer);
+      g.style.opacity=ok?'1':'0.06'; g.style.pointerEvents=ok?'all':'none';
+    });
+  });
+});
+
+// ── PARTICLES ─────────────────────────────────────────────────────
+const pC=document.getElementById('canvas-particles');
+const pX=pC.getContext('2d');
+function resizePC(){ pC.width=window.innerWidth; pC.height=window.innerHeight; }
+resizePC();
+
+class Dot {
+  constructor(){ this.reset(); }
+  reset(){
+    const lk=lpaths[Math.floor(Math.random()*lpaths.length)];
+    Object.assign(this,lk); this.t=0;
+    this.speed=0.003+Math.random()*0.007;
+    this.sz=1.5+Math.random()*2;
+  }
+  step(){ this.t+=this.speed; if(this.t>1) this.reset(); }
+  get pos(){
+    const t=this.t;
+    return {
+      x:(1-t)*(1-t)*this.ax+2*(1-t)*t*this.cx+t*t*this.bx,
+      y:(1-t)*(1-t)*this.ay+2*(1-t)*t*this.cy+t*t*this.by
+    };
+  }
+}
+
+const dots=Array.from({length:55},()=>new Dot());
+function tick(){
+  pX.clearRect(0,0,pC.width,pC.height);
+  dots.forEach(d=>{
+    d.step(); const p=d.pos;
+    const sx=p.x*sc+vx, sy=p.y*sc+vy;
+    pX.beginPath(); pX.arc(sx,sy,d.sz,0,Math.PI*2);
+    pX.fillStyle=d.color; pX.shadowBlur=7; pX.shadowColor=d.color;
+    pX.fill(); pX.shadowBlur=0;
+  });
+  requestAnimationFrame(tick);
+}
+tick();
+
+window.addEventListener('resize',()=>{ drawGrid(); resizePC(); resetView(); });
+</script>
+</body>
+</html>
