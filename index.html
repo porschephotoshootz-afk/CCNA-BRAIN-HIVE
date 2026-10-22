@@ -2,526 +2,762 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CCNA Network Blueprint</title>
-<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Exo+2:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>StarSwarm Strategic CyberSecurity · CCNA Brain Hive</title>
+<meta name="description" content="StarSwarm Strategic CyberSecurity: a CCNA study map where a swarm of defender agents detects and contains simulated rogue AI bots.">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Exo+2:wght@400;600;700;900&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #020b14;
-    --neon-blue: #00c8ff;
-    --neon-cyan: #00ffe7;
-    --neon-green: #39ff6a;
-    --neon-orange: #ff8c00;
-    --neon-purple: #bb66ff;
-    --neon-yellow: #ffe600;
-    --panel: rgba(0,20,40,0.92);
+    --bg:#020b14; --blue:#00c8ff; --cyan:#00ffe7; --green:#39ff6a; --orange:#ff8c00;
+    --purple:#bb66ff; --yellow:#ffe600; --red:#ff3b5c; --pink:#ff5fd2;
+    --panel:rgba(0,20,40,0.94); --mono:'Share Tech Mono',ui-monospace,Menlo,Consolas,monospace;
   }
   * { margin:0; padding:0; box-sizing:border-box; }
-  body {
-    background: var(--bg);
-    font-family: 'Exo 2', sans-serif;
-    color: #fff;
-    overflow: hidden;
-    width: 100vw;
-    height: 100vh;
-  }
-  /* Z-INDEX STACK:
-     0 = bg canvas (grid dots)        pointer-events: none
-     1 = particle canvas              pointer-events: none
-     2 = SVG diagram                  pointer-events: all
-    10 = all UI overlays              pointer-events: all (per element)
-  */
-  #canvas-bg        { position:fixed; inset:0; z-index:0; pointer-events:none; }
-  #canvas-particles { position:fixed; inset:0; z-index:1; pointer-events:none; }
-  #diagram-svg      { position:fixed; inset:0; z-index:2; width:100%; height:100%; cursor:grab; }
-  #diagram-svg.drag { cursor:grabbing; }
+  html,body { width:100%; height:100%; }
+  body { background:var(--bg); font-family:'Exo 2',system-ui,sans-serif; color:#fff; overflow:hidden; }
+  #bg { position:fixed; inset:0; z-index:0; pointer-events:none; }
+  #svg { position:fixed; inset:0; z-index:2; width:100%; height:100%; cursor:grab; touch-action:none; }
+  #svg.drag { cursor:grabbing; }
 
   /* HUD */
-  #hud { position:fixed; top:0; left:0; right:0; z-index:10;
-    padding:10px 22px; display:flex; align-items:center; justify-content:space-between;
-    background:linear-gradient(to bottom,rgba(2,11,20,0.98),transparent); pointer-events:none; }
-  .hud-sm { font-family:'Share Tech Mono',monospace; font-size:9px; letter-spacing:3px; color:var(--neon-cyan); }
-  .hud-lg { font-size:19px; font-weight:900;
-    background:linear-gradient(90deg,var(--neon-blue),var(--neon-cyan));
-    -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
-  .hud-hint { font-family:'Share Tech Mono',monospace; font-size:9px; color:rgba(0,200,255,0.45); text-align:center; line-height:1.6; }
-  .hud-ok { font-family:'Share Tech Mono',monospace; font-size:9px; color:var(--neon-green); letter-spacing:2px; }
+  #hud { position:fixed; top:0; left:0; right:0; z-index:10; padding:10px 16px 8px;
+    display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+    background:linear-gradient(to bottom,rgba(2,11,20,.98) 70%,rgba(2,11,20,0)); }
+  .brand-sm { font-family:var(--mono); font-size:12px; letter-spacing:2px; color:var(--cyan); }
+  .brand-lg { font-size:22px; font-weight:900; letter-spacing:.5px;
+    background:linear-gradient(90deg,var(--blue),var(--cyan),var(--green));
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+  #controls { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .btn { font-family:var(--mono); font-size:13px; letter-spacing:1px; padding:8px 12px; border-radius:18px;
+    background:rgba(0,0,0,.55); border:1px solid rgba(0,200,255,.45); color:var(--cyan); cursor:pointer; user-select:none; }
+  .btn:hover { background:rgba(0,200,255,.12); }
+  .btn.on { border-color:currentColor; background:rgba(255,255,255,.08); }
+  .btn.off { opacity:.4; }
+  #simbtn { color:var(--red); border-color:rgba(255,59,92,.7); font-weight:bold; }
+  #simbtn.running { background:rgba(255,59,92,.16); }
+  a.btn { text-decoration:none; color:var(--yellow); border-color:rgba(255,230,0,.5); }
 
-  /* Layer toggles */
-  #layers { position:fixed; top:66px; left:14px; z-index:10; display:flex; flex-direction:column; gap:5px; }
-  .lbtn { padding:5px 12px; border-radius:20px; cursor:pointer;
-    font-family:'Share Tech Mono',monospace; font-size:9px; letter-spacing:2px;
-    border:1px solid transparent; transition:all .2s; text-transform:uppercase;
-    background:rgba(0,0,0,0.55); user-select:none; }
-  .lbtn.on  { border-color:currentColor; background:rgba(255,255,255,0.07); }
-  .lbtn.off { opacity:.28; }
+  /* Simulation banner */
+  #simbanner { position:fixed; left:50%; transform:translateX(-50%); top:70px; z-index:11; display:none;
+    font-family:var(--mono); font-size:13px; letter-spacing:2px; color:#fff; padding:6px 14px; border-radius:6px;
+    background:repeating-linear-gradient(45deg,rgba(255,59,92,.35) 0 10px,rgba(255,59,92,.18) 10px 20px);
+    border:1px solid var(--red); text-align:center; white-space:nowrap; }
+  #simbanner.show { display:block; }
+  #bstats { display:none; } #logtog { display:none; float:right; color:var(--cyan); letter-spacing:1px; }
+
+  /* Stats */
+  #stats { position:fixed; top:246px; left:14px; z-index:10; display:none; gap:6px; flex-direction:column;
+    font-family:var(--mono); font-size:13px; background:var(--panel); border:1px solid rgba(255,59,92,.35);
+    border-radius:8px; padding:10px 12px; min-width:190px; }
+  #stats.show { display:flex; }
+  #stats div { display:flex; justify-content:space-between; gap:14px; }
+  #stats b { color:#fff; }
+  #stats i { font-style:normal; } #stats .sht { display:none; }
 
   /* Info panel */
-  #panel { position:fixed; top:66px; right:14px; z-index:10; width:285px;
-    background:var(--panel); border:1px solid rgba(0,200,255,0.28); border-radius:10px;
-    padding:15px; backdrop-filter:blur(16px); display:none; }
+  #panel { position:fixed; top:76px; right:14px; z-index:12; width:380px; max-height:calc(100vh - 92px); overflow:auto;
+    background:var(--panel); border:1px solid rgba(0,200,255,.35); border-radius:12px; padding:16px 16px 14px;
+    backdrop-filter:blur(14px); display:none; }
   #panel.show { display:block; }
-  #panel .pl { font-family:'Share Tech Mono',monospace; font-size:8px;
-    letter-spacing:3px; opacity:.45; margin-bottom:3px; text-transform:uppercase; }
-  #panel .pt { font-size:14px; font-weight:700; margin-bottom:11px; }
-  #panel .pb { font-size:11px; line-height:1.85; color:rgba(255,255,255,.72); }
-  #panel .pb b { font-weight:600; }
-  #panel .pc { margin-top:10px; padding:9px; background:rgba(0,0,0,.5); border-radius:6px;
-    border-left:2px solid var(--neon-green);
-    font-family:'Share Tech Mono',monospace; font-size:9px; color:var(--neon-green);
-    line-height:1.9; white-space:pre-wrap; word-break:break-all; }
-  #pclose { position:absolute; top:9px; right:11px; background:none; border:none;
-    color:rgba(255,255,255,.32); font-size:15px; cursor:pointer; line-height:1; }
-  #pclose:hover { color:#fff; }
+  #panel .pk { font-family:var(--mono); font-size:12px; letter-spacing:2px; text-transform:uppercase; opacity:.75; margin-bottom:4px; }
+  #panel .pt { font-size:20px; font-weight:700; margin-bottom:10px; padding-right:24px; }
+  #panel h5 { font-family:var(--mono); font-size:12px; letter-spacing:2px; color:var(--cyan); margin:12px 0 4px; text-transform:uppercase; }
+  #panel p, #panel li { font-size:14px; line-height:1.6; color:rgba(255,255,255,.86); }
+  #panel ul { padding-left:18px; }
+  #panel pre { margin-top:6px; padding:10px; background:rgba(0,0,0,.55); border-radius:6px; border-left:3px solid var(--green);
+    font-family:var(--mono); font-size:12.5px; color:var(--green); line-height:1.55; white-space:pre-wrap; word-break:break-word; }
+  #panel a { color:var(--yellow); word-break:break-word; }
+  #panel .tag { display:inline-block; font-family:var(--mono); font-size:12px; padding:2px 8px; border-radius:10px;
+    border:1px solid currentColor; margin:2px 4px 2px 0; }
+  #panel .simnote { margin-top:10px; font-family:var(--mono); font-size:12px; color:var(--red); }
+  #pclose { position:absolute; top:10px; right:12px; background:none; border:none; color:rgba(255,255,255,.6); font-size:22px; cursor:pointer; }
+
+  /* Event log */
+  #log { position:fixed; left:250px; right:66px; bottom:14px; z-index:10; max-width:760px;
+    background:var(--panel); border:1px solid rgba(255,59,92,.35); border-radius:10px; padding:10px 12px; display:none; }
+  #log.show { display:block; }
+  #log h4 { font-family:var(--mono); font-size:12px; letter-spacing:2px; color:var(--red); margin-bottom:6px; }
+  #logl { font-family:var(--mono); font-size:13px; line-height:1.5; max-height:117px; overflow:hidden; }
+  #logl div { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #logl .t { color:rgba(255,255,255,.5); }
 
   /* Legend */
-  #legend { position:fixed; bottom:14px; left:14px; z-index:10;
-    background:var(--panel); border:1px solid rgba(0,200,255,.16);
-    border-radius:8px; padding:9px 13px; backdrop-filter:blur(12px); pointer-events:none; }
-  #legend h4 { font-family:'Share Tech Mono',monospace; font-size:8px;
-    letter-spacing:3px; color:var(--neon-cyan); margin-bottom:6px; }
-  .lr { display:flex; align-items:center; gap:7px; margin-bottom:3px;
-    font-size:10px; color:rgba(255,255,255,.48); }
-  .ld { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+  #legend { position:fixed; top:76px; left:14px; z-index:10; background:var(--panel);
+    border:1px solid rgba(0,200,255,.2); border-radius:8px; padding:10px 13px; pointer-events:none; }
+  #legend h4 { font-family:var(--mono); font-size:12px; letter-spacing:2px; color:var(--cyan); margin-bottom:6px; }
+  .lr { display:flex; align-items:center; gap:8px; margin-bottom:3px; font-size:13px; color:rgba(255,255,255,.8); }
+  .ld { width:11px; height:11px; border-radius:50%; flex-shrink:0; }
+  .ld.dia { border-radius:0; transform:rotate(45deg); width:9px; height:9px; }
 
-  /* Zoom */
-  #zoom { position:fixed; bottom:14px; right:14px; z-index:10; display:flex; flex-direction:column; gap:5px; }
-  .zb { width:36px; height:36px; background:var(--panel);
-    border:1px solid rgba(0,200,255,.2); border-radius:6px;
-    color:var(--neon-cyan); font-size:18px; cursor:pointer;
-    display:flex; align-items:center; justify-content:center;
-    backdrop-filter:blur(8px); transition:all .2s; }
-  .zb:hover { background:rgba(0,200,255,.12); border-color:var(--neon-cyan); }
+  #zoom { position:fixed; bottom:14px; right:14px; z-index:10; display:flex; flex-direction:column; gap:6px; }
+  .zb { width:40px; height:40px; background:var(--panel); border:1px solid rgba(0,200,255,.3); border-radius:8px;
+    color:var(--cyan); font-size:20px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
 
-  @keyframes flow { to { stroke-dashoffset:-30; } }
+  /* SVG text */
+  .nlabel { font-family:'Exo 2',system-ui,sans-serif; font-weight:700; fill:#eaf8ff; paint-order:stroke; stroke:#020b14; stroke-width:4px; stroke-linejoin:round; }
+  .nsub { font-family:var(--mono); fill:rgba(190,235,255,.78); paint-order:stroke; stroke:#020b14; stroke-width:4px; }
+  .nglyph { font-family:var(--mono); font-weight:bold; text-anchor:middle; dominant-baseline:central; pointer-events:none; }
+  .band-l { font-family:var(--mono); letter-spacing:2px; fill:rgba(0,255,231,.55); }
+  .node { cursor:pointer; }
+  .node:hover .ring { stroke-width:3.5; }
+  .node.dim { opacity:.18; }
+  .edge.dim, .hlink.dim { opacity:.08; }
+  .flow { animation:flow 1.6s linear infinite; }
+  @keyframes flow { to { stroke-dashoffset:-28; } }
+  @keyframes pulse { 0%{ r:var(--r0); opacity:.9 } 100%{ r:var(--r1); opacity:0 } }
+
+  /* Mobile */
+  @media (max-width:760px) {
+    #hud { padding:8px 10px 6px; gap:6px; }
+    .brand-sm { font-size:11px; letter-spacing:1px; }
+    .brand-lg { font-size:18px; }
+    .btn { font-size:12.5px; padding:7px 10px; }
+    #legend { display:none; }
+    #simbanner { top:auto; bottom:78px; left:6px; right:6px; transform:none; font-size:12px; letter-spacing:.3px; padding:3px 8px; text-align:left; overflow:hidden; text-overflow:ellipsis; }
+    #simbanner .lng { display:none; } #bstats { display:inline; }
+    #stats.show { display:none; }
+    #log { left:6px; right:6px; width:auto; max-width:none; bottom:6px; padding:5px 9px; cursor:pointer; }
+    #log h4 { font-size:11.5px; margin-bottom:2px; } #logtog { display:inline; }
+    #logl { max-height:39px; font-size:12.5px; line-height:1.55; }
+    #log.open #logl { max-height:180px; }
+    body.sim #zoom { display:none; }
+    #zoom { flex-direction:row; } .zb { width:38px; height:38px; font-size:18px; }
+  }
+  @media (max-width:380px) {
+    .btn { font-size:11.5px; padding:6px 8px; letter-spacing:.5px; }
+    #controls { gap:5px; }
+    .brand-sm { font-size:10.5px; }
+    #panel { top:auto; bottom:0; left:0; right:0; width:auto; max-height:62vh; border-radius:14px 14px 0 0; }
+    #zoom { bottom:8px; right:8px; }
+    .zb { width:40px; height:40px; }
+  }
 </style>
 </head>
 <body>
-
-<canvas id="canvas-bg"></canvas>
-<canvas id="canvas-particles"></canvas>
-
-<svg id="diagram-svg" xmlns="http://www.w3.org/2000/svg">
+<canvas id="bg"></canvas>
+<svg id="svg" xmlns="http://www.w3.org/2000/svg" aria-label="StarSwarm Strategic CyberSecurity hive map">
   <defs>
-    <marker id="ag" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3z" fill="rgba(57,255,106,.8)"/></marker>
-    <marker id="ab" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3z" fill="rgba(0,200,255,.8)"/></marker>
-    <marker id="ao" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3z" fill="rgba(255,140,0,.8)"/></marker>
-    <marker id="ap" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3z" fill="rgba(187,102,255,.8)"/></marker>
-    <marker id="ac" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3z" fill="rgba(0,255,231,.8)"/></marker>
-    <marker id="ay" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3z" fill="rgba(255,230,0,.8)"/></marker>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <radialGradient id="hiveg" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="rgba(255,230,0,.10)"/><stop offset="1" stop-color="rgba(255,230,0,0)"/></radialGradient>
   </defs>
   <g id="world">
-    <g id="gl"></g>
-    <g id="gn"></g>
+    <g id="gbands"></g>
+    <g id="gedges"></g>
+    <g id="ghive"></g>
+    <g id="gsim"></g>
+    <g id="gnodes"></g>
   </g>
 </svg>
 
-<!-- UI -->
 <div id="hud">
-  <div><div class="hud-sm">CCNA 200-301 · Network Architecture</div><div class="hud-lg">DIGITAL BLUEPRINT</div></div>
-  <div class="hud-hint">CLICK ANY NODE FOR DETAILS<br>DRAG TO PAN · SCROLL TO ZOOM</div>
-  <div class="hud-ok">● ALL LAYERS ACTIVE</div>
+  <div>
+    <div class="brand-sm">CCNA BRAIN HIVE · DEFENDER SWARM</div>
+    <div class="brand-lg">StarSwarm Strategic CyberSecurity</div>
+  </div>
+  <div id="controls">
+    <span class="btn on" data-layer="net" style="color:var(--blue)">Network</span>
+    <span class="btn on" data-layer="agent" style="color:var(--yellow)">Swarm</span>
+    <span class="btn" id="simbtn">▶ Battle sim</span>
+    <a class="btn" href="https://toolkit.starswarm.workers.dev/" target="_blank" rel="noopener">Toolkit ↗</a>
+  </div>
 </div>
 
-<div id="layers">
-  <div class="lbtn on" style="color:var(--neon-orange)"  data-l="physical">PHY LAYER</div>
-  <div class="lbtn on" style="color:var(--neon-blue)"   data-l="datalink">DATA LINK</div>
-  <div class="lbtn on" style="color:var(--neon-green)"  data-l="network">NETWORK</div>
-  <div class="lbtn on" style="color:var(--neon-purple)" data-l="security">SECURITY</div>
-  <div class="lbtn on" style="color:var(--neon-cyan)"   data-l="wireless">WIRELESS</div>
-  <div class="lbtn on" style="color:var(--neon-yellow)" data-l="automation">AUTOMATION</div>
+<div id="simbanner">⚠ SIMULATION<span class="lng"> · illustrative bots and events, not live telemetry</span><span id="bstats"></span></div>
+<div id="stats">
+  <div><span style="color:var(--red)"><i class="lng">Rogue bots (sim)</i><i class="sht">Bots</i></span><b id="s-bots">0</b></div>
+  <div><span style="color:var(--yellow)"><i class="lng">Detected</i><i class="sht">Det</i></span><b id="s-det">0</b></div>
+  <div><span style="color:var(--pink)"><i class="lng">Awaiting approval</i><i class="sht">Approval</i></span><b id="s-appr">0</b></div>
+  <div><span style="color:var(--green)"><i class="lng">Contained</i><i class="sht">Contained</i></span><b id="s-con">0</b></div>
 </div>
 
-<div id="panel">
-  <button id="pclose">✕</button>
-  <div class="pl" id="pl"></div>
-  <div class="pt" id="pt"></div>
-  <div class="pb" id="pb"></div>
-  <div class="pc" id="pc"></div>
-</div>
+<div id="panel"><button id="pclose" aria-label="Close">×</button><div id="pbody"></div></div>
+
+<div id="log"><h4>SWARM EVENT LOG · SIMULATED <span id="logtog">▲ more</span></h4><div id="logl"></div></div>
 
 <div id="legend">
-  <h4>LAYER LEGEND</h4>
-  <div class="lr"><div class="ld" style="background:var(--neon-orange)"></div>Physical (L1)</div>
-  <div class="lr"><div class="ld" style="background:var(--neon-blue)"></div>Data Link (L2)</div>
-  <div class="lr"><div class="ld" style="background:var(--neon-green)"></div>Network (L3)</div>
-  <div class="lr"><div class="ld" style="background:var(--neon-purple)"></div>Security</div>
-  <div class="lr"><div class="ld" style="background:var(--neon-cyan)"></div>Wireless</div>
-  <div class="lr"><div class="ld" style="background:var(--neon-yellow)"></div>Automation</div>
+  <h4>LEGEND</h4>
+  <div class="lr"><span class="ld" style="background:var(--blue)"></span>Network device (CCNA)</div>
+  <div class="lr"><span class="ld" style="background:var(--green)"></span>Endpoint / VLAN</div>
+  <div class="lr"><span class="ld" style="background:var(--purple)"></span>Security service</div>
+  <div class="lr"><span class="ld" style="background:var(--yellow)"></span>Defender agent (swarm)</div>
+  <div class="lr"><span class="ld dia" style="background:var(--red)"></span>Rogue bot (simulated)</div>
+  <div class="lr" style="margin-top:4px;color:rgba(255,255,255,.6)">Click any node to study it</div>
 </div>
 
 <div id="zoom">
-  <button class="zb" id="bzi">+</button>
-  <button class="zb" id="bzo">−</button>
-  <button class="zb" id="bzr">⌖</button>
+  <button class="zb" id="zin" aria-label="Zoom in">+</button>
+  <button class="zb" id="zout" aria-label="Zoom out">−</button>
+  <button class="zb" id="zfit" aria-label="Fit">⤢</button>
 </div>
 
 <script>
-// ── DATA ──────────────────────────────────────────────────────────
-const N = [
-  {id:'internet', x:0,   y:0,   r:54, ly:'network',    c:'#00c8ff', ic:'🌐', lb:'INTERNET',  sb:'WAN / BGP',
-   i:{l:'NETWORK LAYER (L3)',t:'Internet / WAN Edge',
-      b:'The <b>public internet</b> sits at the edge. Traffic leaving your LAN is <b>NATted</b> to a public IP and routed between ISPs via <b>BGP</b>.<br><br>• BGP = path-vector protocol between Autonomous Systems<br>• ISP provides default route 0.0.0.0/0<br>• DNS translates domain names to IPs<br>• Public IP assigned by ISP (static or DHCP)',
-      c:'ip route 0.0.0.0 0.0.0.0 [ISP-GW]\nshow ip route\nping 8.8.8.8\ntraceroute 8.8.8.8'}},
+'use strict';
+/* ============================================================
+   DATA: network nodes (CCNA), defender agents, threats
+   Layout: row + x for wide screens, prow + px for phones.
+   ============================================================ */
+const C = { blue:'#00c8ff', cyan:'#00ffe7', green:'#39ff6a', orange:'#ff8c00', purple:'#bb66ff', yellow:'#ffe600', red:'#ff3b5c', pink:'#ff5fd2' };
 
-  {id:'cable',  x:-400,y:-240,r:36,ly:'physical',  c:'#ff8c00',ic:'🔌',lb:'CABLING', sb:'Cat6 / Fiber',
-   i:{l:'PHYSICAL LAYER (L1)',t:'Network Cabling',
-      b:'<b>No cable = no network.</b> Right media choice matters.<br><br>• <b>UTP Cat5e:</b> 1Gbps / 100m max<br>• <b>UTP Cat6:</b> 10Gbps short-range, 1Gbps 100m<br>• <b>MMF Fiber (OM3):</b> 10Gbps / 550m<br>• <b>SMF Fiber:</b> 10Gbps+ / km range<br><br><b>Straight-through:</b> unlike devices (PC→Switch)<br><b>Crossover:</b> like devices (Switch→Switch)<br><b>Auto-MDIX</b> handles this automatically on modern gear',
-      c:'show interfaces GigabitEthernet0/0\nshow interfaces status\nshow interfaces counters errors'}},
+const SRC = {
+  imperva:  ['Imperva/Thales 2026 Bad Bot Report', 'https://www.imperva.com/blog/bad-bot-report-2026-bots-agentic-age/'],
+  anth:     ['Anthropic: AI-orchestrated espionage (Nov 2025)', 'https://www.anthropic.com/news/disrupting-AI-espionage'],
+  fbi:      ['FBI PSA: AI voice impersonation of officials (May 2025)', 'https://www.ic3.gov/PSA/2025/PSA250515'],
+  fbi2:     ['FBI PSA update (Dec 2025)', 'https://www.fbi.gov/investigate/cyber/alerts/2025/senior-us-officials-continue-to-be-impersonated-in-malicious-messaging-campaign'],
+  gtig:     ['Google GTIG AI Threat Tracker (Nov 2025)', 'https://cloud.google.com/blog/topics/threat-intelligence/threat-actor-usage-of-ai-tools'],
+  grey:     ['GreyNoise: VPN credential campaign (Dec 2025)', 'https://www.greynoise.io/blog/credential-based-campaign-cisco-palo-alto-networks-vpn-gateways'],
+  inv:      ['Invariant Labs: MCP tool poisoning (2025)', 'https://invariantlabs.ai/blog/mcp-security-notification-tool-poisoning-attacks'],
+  owasp:    ['OWASP Top 10 for Agentic Applications 2026', 'https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/'],
+  cisa:     ['CISA: Shai-Hulud npm worm alert (Sep 2025)', 'https://www.cisa.gov/news-events/alerts/2025/09/23/widespread-supply-chain-compromise-impacting-npm-ecosystem'],
+  nx:       ['Nx s1ngularity postmortem (Aug 2025)', 'https://nx.dev/blog/s1ngularity-postmortem'],
+  poison:   ['Anthropic/UK AISI: 250 docs can poison LLMs (Oct 2025)', 'https://www.anthropic.com/research/small-samples-poison'],
+  newstack: ['The New Stack: rogue agent fleet (Oct 2026)', 'https://thenewstack.io/rogue-ai-agent-fleet-tencent/'],
+  mcpx:     ['arXiv 2608.00150: Exposed by Design (MCP)', 'https://arxiv.org/html/2608.00150'],
+  cisaai:   ['CISA + partners: secure adoption of agentic AI', 'https://www.cisa.gov/news-events/news/cisa-us-and-international-partners-release-guide-secure-adoption-agentic-ai'],
+};
 
-  {id:'sfp',    x:-400,y:-150,r:30,ly:'physical',  c:'#ff8c00',ic:'💡',lb:'SFP',     sb:'Transceivers',
-   i:{l:'PHYSICAL LAYER (L1)',t:'SFP Transceivers',
-      b:'<b>Small Form-factor Pluggable</b> modules convert electrical to optical signals.<br><br>• <b>SFP (1G):</b> 1000BASE-SX (MMF), 1000BASE-LX (SMF)<br>• <b>SFP+ (10G):</b> 10GBASE-SR, 10GBASE-LR<br>• <b>QSFP28 (100G):</b> high-density data center uplinks<br><br>Hot-swappable — no device power-down needed',
-      c:'show inventory\nshow interfaces transceiver\nshow interfaces Gi0/1 status'}},
-
-  {id:'rack',   x:-400,y:-60, r:34,ly:'physical',  c:'#ff8c00',ic:'🗄️',lb:'RACK',    sb:'Infrastructure',
-   i:{l:'PHYSICAL LAYER (L1)',t:'Physical Infrastructure',
-      b:'The <b>rack</b> houses all equipment. Good physical design prevents problems before they start.<br><br>• <b>UPS:</b> uninterruptible power supply<br>• <b>Hot/cold aisle:</b> airflow cooling separation<br>• <b>Patch panels:</b> organized cable termination<br>• <b>Console server:</b> out-of-band (OOB) access<br>• <b>PDU:</b> power distribution with monitoring',
-      c:'line console 0\n  logging synchronous\n  exec-timeout 5 0\n  transport input all'}},
-
-  {id:'swa',    x:-210,y:200, r:46,ly:'datalink',  c:'#00c8ff',ic:'🔀',lb:'ACCESS SW',sb:'L2 / VLANs / PoE',
-   i:{l:'DATA LINK LAYER (L2)',t:'Access Layer Switch',
-      b:'<b>Access switches</b> connect end devices and enforce VLAN membership and security policies.<br><br>• Access ports = single VLAN per port<br>• Trunk uplinks to distribution switch<br>• <b>PortFast</b> + <b>BPDU Guard</b> on all access ports<br>• <b>Port security:</b> limit MACs, set violation action<br>• <b>DHCP Snooping:</b> block rogue DHCP servers<br>• <b>802.1X:</b> per-port user authentication',
-      c:'interface range Fa0/1-24\n  switchport mode access\n  switchport access vlan 10\n  spanning-tree portfast\n  spanning-tree bpduguard enable\n  switchport port-security maximum 2\n  switchport port-security violation restrict'}},
-
-  {id:'swd',    x:0,   y:180, r:46,ly:'datalink',  c:'#00c8ff',ic:'🔁',lb:'DIST SW', sb:'L3 / SVI / HSRP',
-   i:{l:'DATA LINK + NETWORK (L2/L3)',t:'Distribution Layer Switch',
-      b:'<b>Distribution switches</b> aggregate access traffic and route between VLANs via SVIs.<br><br>• <b>ip routing</b> enables Layer 3 forwarding<br>• <b>SVI</b> (interface vlan X) = default gateway per VLAN<br>• EtherChannel uplinks to core<br>• Acts as STP root bridge for access VLANs<br>• <b>HSRP/VRRP</b> for gateway redundancy',
-      c:'ip routing\ninterface vlan 10\n  ip address 192.168.10.1 255.255.255.0\ninterface vlan 20\n  ip address 192.168.20.1 255.255.255.0\nip route 0.0.0.0 0.0.0.0 10.0.0.1\nshow ip route'}},
-
-  {id:'stp',    x:-110,y:320, r:32,ly:'datalink',  c:'#00c8ff',ic:'🌳',lb:'STP/RSTP',sb:'Loop Prevention',
-   i:{l:'DATA LINK LAYER (L2)',t:'Spanning Tree Protocol',
-      b:'<b>STP</b> prevents L2 loops by blocking redundant paths. One logical tree per VLAN (PVST+).<br><br><b>Election process:</b><br>1. Root Bridge = lowest Bridge ID (priority + MAC)<br>2. Root Port = best path to root on each non-root switch<br>3. Designated Port = forwarding port per segment<br>4. All others = Blocking<br><br><b>RSTP (802.1w)</b> converges in under 1 second vs 30-50s classic STP',
-      c:'spanning-tree mode rapid-pvst\nspanning-tree vlan 10 priority 4096\nshow spanning-tree vlan 10\nshow spanning-tree summary'}},
-
-  {id:'etha',   x:110, y:320, r:32,ly:'datalink',  c:'#00c8ff',ic:'⚡',lb:'ETHER-\nCHAN',sb:'LACP / PAgP',
-   i:{l:'DATA LINK LAYER (L2)',t:'EtherChannel (Link Aggregation)',
-      b:'<b>EtherChannel</b> bundles up to 8 physical links into one logical interface — more bandwidth and redundancy.<br><br>• <b>LACP (802.3ad):</b> active/passive — open standard (use this)<br>• <b>PAgP:</b> desirable/auto — Cisco proprietary<br><br>All member ports must match: speed, duplex, VLAN config, trunk settings. Load balanced by src/dst MAC or IP hash.',
-      c:'interface range Gi0/1-2\n  channel-group 1 mode active\ninterface port-channel 1\n  switchport mode trunk\nshow etherchannel summary'}},
-
-  {id:'router', x:210, y:0,   r:48,ly:'network',   c:'#39ff6a',ic:'📡',lb:'ROUTER',  sb:'Gateway / NAT',
-   i:{l:'NETWORK LAYER (L3)',t:'Edge Router',
-      b:'The <b>edge router</b> connects LAN to WAN, runs NAT/PAT, and is the last hop before the internet.<br><br>• <b>NAT/PAT:</b> private → public IP translation<br>• <b>Default route:</b> 0.0.0.0/0 toward ISP<br>• <b>DHCP server</b> for internal hosts<br>• <b>ACLs</b> for stateless packet filtering<br>• <b>QoS</b> marks and prioritizes traffic classes',
-      c:'ip nat inside source list 1 interface Gi0/0 overload\naccess-list 1 permit 192.168.0.0 0.0.255.255\nip route 0.0.0.0 0.0.0.0 203.0.113.1\nshow ip nat translations\nshow ip route'}},
-
-  {id:'ospf',   x:330, y:-120,r:36,ly:'network',   c:'#39ff6a',ic:'🗺️',lb:'OSPF',    sb:'Link-State IGP',
-   i:{l:'NETWORK LAYER (L3)',t:'OSPF Routing Protocol',
-      b:'<b>Open Shortest Path First</b> — link-state, uses Dijkstra SPF algorithm. Admin Distance = 110.<br><br><b>Process:</b><br>1. Form neighbor adjacency (Hello packets)<br>2. Exchange LSAs → build identical LSDB on all routers<br>3. Run SPF → install best routes in RIB<br><br><b>DR/BDR election</b> on broadcast segments (highest priority wins, then highest RID)<br><b>Area 0</b> = backbone; all other areas must connect to it',
-      c:'router ospf 1\n  router-id 1.1.1.1\n  network 10.0.0.0 0.0.0.255 area 0\n  passive-interface default\n  no passive-interface Gi0/0\nshow ip ospf neighbor\nshow ip ospf database'}},
-
-  {id:'bgp',    x:330, y:120, r:36,ly:'network',   c:'#39ff6a',ic:'🛣️',lb:'BGP',     sb:'Path-Vector / ISP',
-   i:{l:'NETWORK LAYER (L3)',t:'BGP — Border Gateway Protocol',
-      b:'<b>BGP</b> routes traffic between Autonomous Systems — it is the routing protocol of the internet.<br><br>• <b>eBGP:</b> between different ASes — AD 20<br>• <b>iBGP:</b> within same AS — AD 200<br><br><b>Best path selection order:</b><br>Weight → Local Preference → Locally Originated → AS Path → Origin → MED → eBGP over iBGP → IGP metric',
-      c:'router bgp 65000\n  neighbor 203.0.113.1 remote-as 65001\n  network 198.51.100.0 mask 255.255.255.0\nshow ip bgp summary\nshow ip bgp\nshow ip bgp 0.0.0.0'}},
-
-  {id:'nat',    x:200, y:-180,r:33,ly:'network',   c:'#39ff6a',ic:'🔄',lb:'NAT/PAT', sb:'Address Translation',
-   i:{l:'NETWORK LAYER (L3)',t:'NAT / PAT',
-      b:'<b>NAT</b> translates private IPs to public. <b>PAT</b> (overload) maps many private IPs to one public IP using unique port numbers.<br><br>• <b>Static NAT:</b> 1:1 permanent mapping (public servers)<br>• <b>Dynamic NAT:</b> pool of public IPs<br>• <b>PAT/Overload:</b> many:1 with ports — most common<br><br><b>Inside local</b> = private IP before translation<br><b>Inside global</b> = public IP after translation',
-      c:'ip nat inside source list 1 int Gi0/0 overload\ninterface Gi0/0\n  ip nat outside\ninterface Gi0/1\n  ip nat inside\nshow ip nat translations\ndebug ip nat'}},
-
-  {id:'dhcp',   x:-60, y:-200,r:31,ly:'network',   c:'#39ff6a',ic:'📋',lb:'DHCP',    sb:'IP Assignment',
-   i:{l:'NETWORK LAYER (L3)',t:'DHCP',
-      b:'<b>Dynamic Host Configuration Protocol</b> — automatically hands out IP, mask, gateway, DNS to hosts.<br><br><b>DORA process:</b><br>1. <b>Discover</b> — client broadcasts (255.255.255.255)<br>2. <b>Offer</b> — server proposes IP lease<br>3. <b>Request</b> — client requests offered IP<br>4. <b>Acknowledge</b> — server confirms assignment<br><br><b>ip helper-address</b> relays DHCP requests across routers',
-      c:'ip dhcp pool LAN\n  network 192.168.1.0 /24\n  default-router 192.168.1.1\n  dns-server 8.8.8.8\n  lease 7\nip dhcp excluded-address 192.168.1.1 192.168.1.20\nshow ip dhcp binding'}},
-
-  {id:'dns',    x:60,  y:-200,r:31,ly:'network',   c:'#39ff6a',ic:'🔍',lb:'DNS',     sb:'Name Resolution',
-   i:{l:'APPLICATION LAYER (L7)',t:'DNS — Domain Name System',
-      b:'<b>DNS</b> resolves hostnames to IP addresses. Uses UDP (and TCP) port 53.<br><br><b>Record types:</b><br>• <b>A:</b> hostname → IPv4 address<br>• <b>AAAA:</b> hostname → IPv6 address<br>• <b>CNAME:</b> alias pointing to another name<br>• <b>MX:</b> mail server for a domain<br>• <b>PTR:</b> reverse lookup (IP → name)',
-      c:'ip domain-name corp.local\nip name-server 8.8.8.8 8.8.4.4\nip host server1 192.168.1.100\nshow hosts'}},
-
-  {id:'fw',     x:-200,y:-200,r:44,ly:'security',  c:'#bb66ff',ic:'🛡️',lb:'FIREWALL',sb:'Stateful / ZBF',
-   i:{l:'SECURITY (L3/L4)',t:'Firewall',
-      b:'<b>Stateful firewalls</b> track connection state — return traffic is automatically permitted. Zone-Based Firewall (ZBF) assigns interfaces to security zones.<br><br><b>Zones:</b><br>• <b>Inside:</b> trusted LAN<br>• <b>Outside:</b> untrusted WAN<br>• <b>DMZ:</b> semi-trusted (public-facing servers)<br><br>Traffic between zones needs an explicit inspect policy. <b>ACLs are stateless</b> — every packet evaluated independently.',
-      c:'zone security INSIDE\nzone security OUTSIDE\nzone-pair security IN-OUT source INSIDE destination OUTSIDE\n  service-policy type inspect ZBF-POLICY\nshow zone-pair security'}},
-
-  {id:'acl',    x:-320,y:-120,r:34,ly:'security',  c:'#bb66ff',ic:'📝',lb:'ACL',     sb:'Packet Filter',
-   i:{l:'SECURITY (L3)',t:'Access Control Lists (ACLs)',
-      b:'<b>ACLs</b> filter packets top-down; first match wins. <b>Implicit deny all</b> at the end of every ACL!<br><br>• <b>Standard (1-99):</b> match source IP only → place near destination<br>• <b>Extended (100-199):</b> src + dst + protocol + port → place near source<br>• <b>Named ACLs:</b> human-readable, supports editing individual entries',
-      c:'ip access-list extended INBOUND\n  permit tcp 10.0.0.0 0.0.0.255 any eq 443\n  permit tcp 10.0.0.0 0.0.0.255 any eq 80\n  deny ip any any log\ninterface Gi0/0\n  ip access-group INBOUND in\nshow ip access-lists'}},
-
-  {id:'vpn',    x:-320,y:0,   r:34,ly:'security',  c:'#bb66ff',ic:'🔐',lb:'VPN',     sb:'IPsec / SSL',
-   i:{l:'SECURITY (L3)',t:'VPN — IPsec / SSL',
-      b:'<b>VPNs</b> encrypt traffic across untrusted networks (internet).<br><br><b>IPsec phases:</b><br>• <b>IKE Phase 1:</b> authenticate peers, build encrypted ISAKMP SA (HAGLE: Hash, Auth, Group, Lifetime, Encrypt)<br>• <b>IKE Phase 2:</b> negotiate IPsec SA for data encryption<br><br>• <b>ESP (proto 50):</b> encrypts + authenticates payload — use this<br>• <b>AH (proto 51):</b> authenticates only, no encryption<br>• <b>Tunnel mode:</b> encrypts entire original packet',
-      c:'crypto isakmp policy 10\n  encryption aes 256\n  authentication pre-share\ncrypto ipsec transform-set TS esp-aes 256 esp-sha-hmac\ncrypto map VPNMAP 10 ipsec-isakmp\n  set peer 203.0.113.1\n  set transform-set TS\nshow crypto session'}},
-
-  {id:'aaa',    x:-320,y:120, r:34,ly:'security',  c:'#bb66ff',ic:'🔑',lb:'AAA',     sb:'TACACS+ / RADIUS',
-   i:{l:'SECURITY',t:'AAA — Authentication, Authorization, Accounting',
-      b:'<b>AAA</b> controls who can access network devices and what they can do on them.<br><br>• <b>RADIUS:</b> UDP 1645/1646, encrypts password only, combines AuthN+AuthZ — good for network access (802.1X)<br>• <b>TACACS+:</b> TCP 49, encrypts full packet, separates AuthN/AuthZ/Accounting — Cisco preferred for device admin<br><br><b>802.1X:</b> port-based authentication via RADIUS server',
-      c:'aaa new-model\naaa authentication login VTY group tacacs+ local\ntacacs server CORP\n  address ipv4 10.0.0.10\n  key SecretKey!\nline vty 0 4\n  login authentication VTY'}},
-
-  {id:'dai',    x:-200,y:300, r:30,ly:'security',  c:'#bb66ff',ic:'⚔️',lb:'DAI',     sb:'ARP Inspection',
-   i:{l:'SECURITY (L2)',t:'DHCP Snooping + Dynamic ARP Inspection',
-      b:'<b>DHCP Snooping</b> builds a binding table (IP ↔ MAC ↔ port). <b>DAI</b> validates ARP against this table — blocking ARP poisoning and MITM attacks.<br><br>• <b>Trusted ports:</b> uplinks, DHCP servers<br>• <b>Untrusted ports:</b> all end-user access ports<br>• Invalid ARP packet → dropped and logged<br><br>Enable DHCP Snooping FIRST — DAI depends on its binding table!',
-      c:'ip dhcp snooping\nip dhcp snooping vlan 10,20\nip arp inspection vlan 10,20\ninterface Gi0/24\n  ip dhcp snooping trust\n  ip arp inspection trust\nshow ip dhcp snooping binding\nshow ip arp inspection vlan 10'}},
-
-  {id:'wlc',    x:0,   y:-300,r:42,ly:'wireless',  c:'#00ffe7',ic:'📶',lb:'WLC',     sb:'Wireless Controller',
-   i:{l:'WIRELESS (CAPWAP)',t:'Wireless LAN Controller (WLC)',
-      b:'The <b>WLC</b> centrally manages all lightweight APs via CAPWAP tunnels. All RF management and roaming decisions happen here.<br><br><b>CAPWAP tunnel ports:</b><br>• <b>UDP 5246:</b> Control plane (config, management)<br>• <b>UDP 5247:</b> Data plane (client traffic)<br><br><b>AP Modes:</b><br>• Local: all traffic tunneled through WLC<br>• FlexConnect: local switching if WLC unreachable<br>• Monitor: passive RF scanning only',
-      c:'config wlan create 1 Corp Corp-SSID\nconfig wlan security wpa akm 802.1x enable 1\nconfig wlan enable 1\nshow wlan summary\nshow ap summary\nshow client summary'}},
-
-  {id:'ap',     x:-110,y:-360,r:34,ly:'wireless',  c:'#00ffe7',ic:'📡',lb:'ACCESS PT',sb:'802.11ax / Wi-Fi 6',
-   i:{l:'WIRELESS (L1/L2)',t:'Wireless Access Point',
-      b:'<b>Lightweight APs</b> handle only the radio functions — all intelligence lives in the WLC.<br><br><b>Standards:</b><br>• 802.11n (Wi-Fi 4): 2.4/5GHz, MIMO, 600Mbps<br>• 802.11ac (Wi-Fi 5): 5GHz, MU-MIMO, 3.5Gbps<br>• 802.11ax (Wi-Fi 6): OFDMA, 2.4/5/6GHz, 9.6Gbps<br><br><b>2.4GHz non-overlapping channels:</b> 1, 6, 11 ONLY<br><b>SNR target:</b> greater than 20 dB for reliable connection',
-      c:'! APs join WLC automatically\nconfig ap name AP-FLOOR1 [mac]\nconfig ap channel 36 AP-FLOOR1\nshow ap config general AP-FLOOR1\nshow ap dot11 24ghz channel'}},
-
-  {id:'wpa',    x:110, y:-360,r:34,ly:'wireless',  c:'#00ffe7',ic:'🔒',lb:'WPA3',    sb:'Wireless Security',
-   i:{l:'WIRELESS SECURITY',t:'Wireless Security Standards',
-      b:'<b>Use WPA2 or WPA3 — never WEP (broken) or WPS (vulnerable).</b><br><br>• <b>WPA2-Personal:</b> Pre-shared key (PSK) + AES-CCMP<br>• <b>WPA2-Enterprise:</b> 802.1X + RADIUS — per-user credentials (best practice)<br>• <b>WPA3-Personal:</b> SAE replaces PSK — resistant to offline brute-force<br>• <b>WPA3-Enterprise:</b> 192-bit security suite<br><br>WPA3 is mandatory for Wi-Fi 6 certification',
-      c:'! On WLC:\nconfig wlan security wpa wpa2 enable 1\nconfig wlan security wpa wpa2 ciphers aes enable 1\nconfig wlan security 802.1x enable 1\nshow rogue ap summary\nshow wlan security 1'}},
-
-  {id:'dnac',   x:200, y:-300,r:42,ly:'automation',c:'#ffe600',ic:'🧬',lb:'DNA CTR', sb:'Intent-Based Mgmt',
-   i:{l:'AUTOMATION / SDN',t:'Cisco DNA Center',
-      b:'<b>Cisco DNA Center</b> is the campus network controller — translates business intent into network configuration automatically.<br><br>• <b>Design:</b> network hierarchy, site templates<br>• <b>Policy:</b> group-based access control (SGTs)<br>• <b>Provision:</b> zero-touch PnP device deployment<br>• <b>Assurance:</b> AI-driven health monitoring + troubleshooting<br><br>Exposes a northbound <b>REST API</b> for integration with apps',
-      c:'# Python - get auth token\nimport requests\nurl = "https://dnac/dna/system/api/v1/auth/token"\nr = requests.post(url, auth=("admin","pass"), verify=False)\ntoken = r.json()["Token"]'}},
-
-  {id:'ansible', x:340,y:-250,r:32,ly:'automation',c:'#ffe600',ic:'⚙️',lb:'ANSIBLE', sb:'Agentless YAML',
-   i:{l:'AUTOMATION',t:'Ansible Network Automation',
-      b:'<b>Ansible</b> is agentless — uses SSH/NETCONF to push configuration via YAML playbooks. No agent installed on devices.<br><br>• <b>Inventory:</b> list of managed devices<br>• <b>Playbook:</b> YAML list of tasks to execute<br>• <b>Module:</b> cisco.ios.ios_config, ios_command<br>• <b>Jinja2 templates:</b> generate dynamic configs<br>• <b>Idempotent:</b> safe to run multiple times without side effects',
-      c:'- name: Push OSPF config\n  hosts: routers\n  tasks:\n    - cisco.ios.ios_config:\n        lines:\n          - network 10.0.0.0 0.0.0.255 area 0\n        parents: router ospf 1'}},
-
-  {id:'rest',    x:340,y:-140,r:32,ly:'automation',c:'#ffe600',ic:'🔗',lb:'REST API', sb:'HTTP / JSON',
-   i:{l:'AUTOMATION / PROGRAMMABILITY',t:'REST API',
-      b:'<b>REST APIs</b> allow programmatic network control via standard HTTP methods and JSON data.<br><br>• <b>GET:</b> retrieve data (read-only, safe)<br>• <b>POST:</b> create a new resource<br>• <b>PUT:</b> replace an existing resource<br>• <b>PATCH:</b> partially update a resource<br>• <b>DELETE:</b> remove a resource<br><br>Common status codes: 200 OK, 201 Created, 400 Bad Request, 401 Unauthorized, 404 Not Found',
-      c:'import requests\nheaders = {\n  "X-Auth-Token": token,\n  "Content-Type": "application/json"\n}\nr = requests.get(\n  "https://dnac/dna/intent/api/v1/network-device",\n  headers=headers, verify=False)\ndevices = r.json()["response"]'}},
-
-  {id:'netconf', x:340,y:-30, r:30,ly:'automation',c:'#ffe600',ic:'📨',lb:'NETCONF', sb:'XML over SSH',
-   i:{l:'AUTOMATION / PROGRAMMABILITY',t:'NETCONF / RESTCONF',
-      b:'<b>NETCONF</b> uses XML over SSH port 830 with YANG data models for structured device management.<br><br><b>Datastores:</b><br>• <b>running:</b> currently active config<br>• <b>candidate:</b> staging area (commit to apply)<br>• <b>startup:</b> config loaded at boot<br><br><b>RESTCONF</b> = REST-flavored NETCONF over HTTP/HTTPS. Both rely on <b>YANG</b> models to define available data.',
-      c:'netconf-yang\nrestconf\nip http secure-server\n# Python ncclient:\nfrom ncclient import manager\nm = manager.connect(host="10.0.0.1",\n  port=830, username="admin",\n  password="cisco")\ncfg = m.get_config(source="running")'}},
-
-  {id:'python',  x:200, y:310, r:34,ly:'automation',c:'#ffe600',ic:'🐍',lb:'PYTHON',  sb:'Netmiko / NAPALM',
-   i:{l:'AUTOMATION',t:'Python Network Automation',
-      b:'<b>Python</b> is the dominant language for network automation scripting and tooling.<br><br><b>Key libraries:</b><br>• <b>Netmiko:</b> SSH connections to Cisco and multi-vendor devices<br>• <b>NAPALM:</b> multi-vendor structured getters (facts, routes, interfaces)<br>• <b>nornir:</b> parallel task execution framework<br>• <b>requests:</b> HTTP/REST API calls<br>• <b>json / yaml:</b> parse API responses and config templates',
-      c:'from netmiko import ConnectHandler\ndevice = {\n  "device_type": "cisco_ios",\n  "host": "10.0.0.1",\n  "username": "admin",\n  "password": "cisco"\n}\nwith ConnectHandler(**device) as conn:\n  out = conn.send_command("show ip route")\n  print(out)'}},
+// rows (wide): 0 internet, 1 edge, 2 core, 3 access, 4 endpoints, 5 hive
+// prow (phone): 0..4 same, 5..7 hive
+const NODES = [
+  { id:'inet', kind:'net', glyph:'WAN', color:C.orange, row:0, x:560, prow:0, px:195, label:'Internet', sub:'untrusted · 0.0.0.0/0',
+    p:{ type:'Zone · Untrusted', what:'Everything outside your edge. Bots now make up most web traffic: Imperva/Thales counted 53% bots in 2025, with bad bots alone at 40%.',
+      ccna:'Default route (0.0.0.0/0) points here. Treat every inbound flow as hostile until an ACL or firewall policy says otherwise.',
+      threats:['Credential-stuffing and scraping swarms','AI-run recon and intrusion (GTG-1002, ~80-90% done by AI per Anthropic)','Phishing and deepfake voice lures'],
+      defense:'Edge ACLs, uRPF, firewall/IPS, rate limits, and a Sentinel watching NetFlow at the edge.',
+      src:['imperva','anth'] } },
+  { id:'cloud', kind:'net', glyph:'CLD', color:C.orange, row:0, x:840, prow:0, px:320, pl:'Cloud + LLM', label:'Cloud + LLM APIs', sub:'SaaS · registries · MCP',
+    p:{ type:'Zone · Cloud services', what:'SaaS, package registries (npm/PyPI), model hubs, LLM APIs and remote MCP servers your agents call.',
+      ccna:'Reached through NAT and the firewall. Know which FQDNs and ports each VLAN is allowed to reach (egress allowlist).',
+      threats:['Supply-chain worms: Shai-Hulud compromised 500+ npm packages (CISA)','s1ngularity Nx packages abused local AI CLIs to hunt secrets','Data poisoning: ~250 docs could backdoor models up to 13B params in a study','Exposed MCP servers, most tested without OAuth'],
+      defense:'Pin dependencies, use trusted publishing, rotate tokens, egress allowlist per VLAN, verify MCP servers before agents can call them.',
+      src:['cisa','nx','poison','mcpx'] } },
+  { id:'siem', kind:'net', glyph:'LOG', color:C.purple, row:2, x:1220, prow:0, px:70, pl:'SIEM', label:'SIEM / Collector', sub:'syslog · SNMPv3 · NetFlow',
+    p:{ type:'Security service · Visibility', what:'Collects syslog, SNMP traps and NetFlow/IPFIX from every device. The swarm reads from here, it never writes config from here.',
+      ccna:'Syslog severity levels 0-7, SNMPv3 (authPriv), NTP so timestamps line up, NetFlow exporters and monitors.',
+      threats:['Attackers clearing logs','Alert floods that hide the real bot'],
+      defense:'Send logs off-box, sync NTP, use SNMPv3 not v2c, alert on gaps in log flow.',
+      cfg:'ntp server 10.0.99.5\nservice timestamps log datetime msec\nlogging host 10.0.99.10\nlogging trap informational\nsnmp-server group HIVE v3 priv\nsnmp-server host 10.0.99.10 version 3 priv sentinel\nsnmp-server enable traps port-security',
+      src:[] } },
+  { id:'edge', kind:'net', glyph:'R1', color:C.blue, row:1, x:420, prow:1, px:70, pl:'Edge Router', label:'Edge Router', sub:'ACL · NAT · uRPF',
+    p:{ type:'Network device · Layer 3', what:'First hop from the Internet. Filters spoofed and junk traffic before it reaches the firewall.',
+      ccna:'Extended ACLs (applied inbound, closest to the source), PAT/NAT overload, unicast RPF, static default route.',
+      threats:['Spoofed source floods','Bot swarms scanning for open services'],
+      defense:'Deny RFC1918 sources inbound, permit only published services, log the deny.',
+      cfg:'ip access-list extended EDGE-IN\n deny   ip 10.0.0.0 0.255.255.255 any\n deny   ip 192.168.0.0 0.0.255.255 any\n permit tcp any host 203.0.113.10 eq 443\n deny   ip any any log\ninterface Gi0/0\n ip access-group EDGE-IN in\n ip verify unicast source reachable-via rx',
+      src:[] } },
+  { id:'fw', kind:'net', glyph:'FW', color:C.purple, row:1, x:700, prow:1, px:195, pl:'Firewall/IPS', label:'Firewall / IPS', sub:'zones · IPS · egress',
+    p:{ type:'Security service · Next-gen firewall', what:'Stateful firewall with intrusion prevention. Also controls what goes OUT, which is how you catch malware phoning an LLM API.',
+      ccna:'Stateful inspection vs ACLs, security zones (inside/outside/DMZ), IPS signatures, egress filtering.',
+      threats:['AI-mutating malware: GTIG saw PROMPTFLUX ask Gemini to rewrite its own code (experimental) and PROMPTSTEAL query an LLM for commands','C2 beacons from phished laptops'],
+      defense:'Egress allowlist: only approved hosts may reach LLM APIs. Alert when a server or script talks to an AI API it never used before.',
+      src:['gtig'] } },
+  { id:'vpn', kind:'net', glyph:'VPN', color:C.blue, row:1, x:980, prow:1, px:320, label:'VPN Gateway', sub:'IPsec/SSL · MFA',
+    p:{ type:'Network device · Remote access', what:'Remote-access VPN for staff. A favorite target for automated password spraying.',
+      ccna:'IPsec vs SSL VPN, site-to-site vs remote access, AAA with RADIUS/TACACS+, MFA.',
+      threats:['GreyNoise saw ~1.7M automated login sessions against GlobalProtect portals in 16 hours (Dec 2025), then a pivot to Cisco SSL VPN'],
+      defense:'MFA everywhere, lockout and login rate limits, alert on failure spikes per ASN, block sources only after human review.',
+      cfg:'aaa new-model\naaa authentication login VPN group radius local\naaa local authentication attempts max-fail 5\nlogin block-for 120 attempts 5 within 60\nlogin on-failure log',
+      src:['grey'] } },
+  { id:'wlc', kind:'net', glyph:'WLC', color:C.cyan, row:2, x:280, prow:2, px:70, pl:'Wireless Ctrl', label:'Wireless Ctrl', sub:'WLC · rogue detect',
+    p:{ type:'Network device · Wireless', what:'Manages APs and scans the air for rogue and evil-twin access points.',
+      ccna:'Lightweight APs + WLC (CAPWAP), WPA2/WPA3-Enterprise, 802.11w protected management frames, rogue AP classification.',
+      threats:['Evil-twin APs that copy your SSID to steal logins'],
+      defense:'WPA3-Enterprise with 802.1X, PMF required, rogue detection alerts. Containment over the air only where legal and on your own property.',
+      cfg:'! illustrative WLAN policy\nWLAN CORP  SSID: CORP\n security: WPA3-Enterprise (802.1X)\n PMF (802.11w): required\n rogue detection: alarm on SSID match\n rogue containment: manual + approval',
+      src:[] } },
+  { id:'core', kind:'net', glyph:'L3', color:C.blue, row:2, x:700, prow:2, px:195, pl:'Core L3', label:'Core L3 Switch', sub:'SVIs · OSPF · NetFlow',
+    p:{ type:'Network device · Core', what:'Routes between VLANs and exports flow records so the swarm can spot lateral movement.',
+      ccna:'Inter-VLAN routing with SVIs, OSPF, VLAN ACLs between segments, NetFlow (flow exporter / monitor).',
+      threats:['Lateral movement from a phished laptop to servers','ARP spoofing of the default gateway'],
+      defense:'Segment by VLAN, filter between VLANs, watch NetFlow for new east-west talkers.',
+      cfg:'flow exporter SIEM\n destination 10.0.99.10\n transport udp 2055\nflow monitor HIVE\n exporter SIEM\n record netflow ipv4 original-input\ninterface Vlan30\n ip flow monitor HIVE input\n ip access-group AGENT-EGRESS in',
+      src:[] } },
+  { id:'aaa', kind:'net', glyph:'AAA', color:C.purple, row:2, x:980, prow:2, px:320, pl:'AAA/RADIUS', label:'AAA / RADIUS', sub:'802.1X · NAC · CoA',
+    p:{ type:'Security service · Identity', what:'Decides who and what gets on the network, and can move a device into a quarantine VLAN with Change of Authorization.',
+      ccna:'AAA (authentication, authorization, accounting), RADIUS vs TACACS+, 802.1X supplicant / authenticator / server.',
+      threats:['Stolen credentials','Unknown devices plugging in'],
+      defense:'802.1X on every access port, MAB only for known devices, CoA to quarantine after approval.',
+      cfg:'aaa new-model\naaa authentication dot1x default group radius\naaa authorization network default group radius\ndot1x system-auth-control\nradius server NAC\n address ipv4 10.0.99.20 auth-port 1812 acct-port 1813\naaa server radius dynamic-author\n client 10.0.99.20',
+      src:[] } },
+  { id:'ap', kind:'net', glyph:'AP', color:C.cyan, row:3, x:280, prow:3, px:70, pl:'Access Point', label:'Access Point', sub:'WPA3 · PMF',
+    p:{ type:'Network device · Wireless', what:'Your legit AP. The rogue bot sim plants a fake one nearby.',
+      ccna:'802.11 standards, SSID vs BSSID, channels, WPA3, controller-based APs.',
+      threats:['Rogue / evil-twin AP','Deauth attacks to push clients to the fake AP'],
+      defense:'PMF blocks forged deauths, 802.1X with server cert validation stops clients trusting the fake AP.',
+      src:[] } },
+  { id:'swa', kind:'net', glyph:'SW', color:C.blue, row:3, x:560, prow:3, px:195, pl:'Switch A', label:'Access Switch A', sub:'DAI · snooping · PSec',
+    p:{ type:'Network device · Layer 2 access', what:'Where user laptops plug in. Layer 2 is where ARP spoofing and rogue DHCP live, so this switch is a key sensor.',
+      ccna:'Port security, DHCP snooping (trusted vs untrusted ports), Dynamic ARP Inspection, BPDU guard, 802.1X on access ports.',
+      threats:['ARP spoofing / man-in-the-middle','Rogue DHCP server','MAC flooding'],
+      defense:'DAI drops ARP replies that do not match the DHCP snooping binding table. Port security limits MACs per port.',
+      cfg:'ip dhcp snooping\nip dhcp snooping vlan 10,20\nip arp inspection vlan 10,20\ninterface Gi1/0/5\n switchport mode access\n switchport access vlan 10\n switchport port-security maximum 2\n switchport port-security violation restrict\n spanning-tree bpduguard enable\n authentication port-control auto\n dot1x pae authenticator\ninterface Gi1/0/48\n ip dhcp snooping trust\n ip arp inspection trust',
+      src:[] } },
+  { id:'swb', kind:'net', glyph:'SW', color:C.blue, row:3, x:840, prow:3, px:320, pl:'Switch B', label:'Access Switch B', sub:'VLAN 30/40 · ACL',
+    p:{ type:'Network device · Layer 2 access', what:'Hosts the AI agent VLAN and the server VLAN, kept apart from users.',
+      ccna:'VLANs, trunks (802.1Q), native VLAN hardening, storm control, VLAN access maps.',
+      threats:['A hijacked AI agent trying to reach servers it should not touch'],
+      defense:'Separate VLAN for agents, ACL so agents can only reach the services they need.',
+      cfg:'vlan 30\n name AI-AGENTS\nvlan 40\n name SERVERS\nvlan 999\n name QUARANTINE\ninterface Gi1/0/1\n switchport trunk native vlan 998\n switchport trunk allowed vlan 30,40,999\n storm-control broadcast level 1.00',
+      src:[] } },
+  { id:'wifi', kind:'net', glyph:'W20', color:C.green, row:4, x:180, prow:4, px:49, pl:'Wi-Fi', label:'Wi-Fi Clients', sub:'VLAN 20',
+    p:{ type:'Endpoints · VLAN 20', what:'Phones and laptops on wireless.', ccna:'VLAN per SSID, client isolation, DHCP scopes.',
+      threats:['Connecting to an evil twin','Deepfake voice / SMS lures on mobile (FBI warned of AI voice messages impersonating officials)'],
+      defense:'802.1X with cert checks, MDM, verify callers through a known number.', src:['fbi','fbi2'] } },
+  { id:'lap', kind:'net', glyph:'V10', color:C.green, row:4, x:420, prow:4, px:146, pl:'Laptops', label:'User Laptops', sub:'VLAN 10',
+    p:{ type:'Endpoints · VLAN 10', what:'Staff laptops. The usual landing spot for AI-written phishing.',
+      ccna:'Access VLAN, DHCP, default gateway, host firewall.',
+      threats:['AI-generated phishing and deepfake voice pretexts','Infostealers that grab session tokens'],
+      defense:'Phishing-resistant MFA, EDR, DNS filtering, quarantine VLAN on detection (after approval).', src:['fbi'] } },
+  { id:'agenthost', kind:'net', glyph:'AI', color:C.pink, row:4, x:700, prow:4, px:243, pl:'AI Agent', label:'AI Agent Host', sub:'VLAN 30 · MCP tools',
+    p:{ type:'Endpoints · VLAN 30 · AI agents', what:'Where your own AI agents and MCP tools run. They read untrusted content, which makes them a target.',
+      ccna:'Its own VLAN, egress ACL, least privilege. Treat agent identities like service accounts in AAA.',
+      threats:['Prompt injection and goal hijack (OWASP ASI01)','MCP tool poisoning: hidden instructions in tool descriptions (Invariant Labs)','Over-privileged tokens (ASI03)'],
+      defense:'Least-privilege tokens, tool allowlists, human approval for risky tool calls, egress allowlist, log every tool call.',
+      src:['owasp','inv','cisaai'] } },
+  { id:'srv', kind:'net', glyph:'V40', color:C.green, row:4, x:980, prow:4, px:341, pl:'Servers', label:'Servers', sub:'VLAN 40',
+    p:{ type:'Endpoints · VLAN 40', what:'Apps and data. Crown jewels.', ccna:'Server VLAN, ACLs, DMZ vs inside, patching.',
+      threats:['LLM-assisted malware calling AI APIs at runtime (GTIG)','Poisoned dependencies (Shai-Hulud)'],
+      defense:'Egress allowlist, dependency pinning, credential rotation.', src:['gtig','cisa'] } },
+  // ---- Defender swarm ----
+  { id:'sentinel', kind:'agent', glyph:'SEN', color:C.yellow, row:5, x:160, prow:5, px:49, label:'Sentinel', sub:'detect',
+    p:{ type:'Defender agent · Detect', what:'Watches telemetry 24/7 and raises the first alert.',
+      watches:'NetFlow/IPFIX, syslog, SNMP traps, IPS alerts, DNS logs, WLC rogue reports, DAI and DHCP snooping drop counters, VPN/AAA failures, AI agent tool-call logs.',
+      ccna:'NetFlow, syslog levels, SNMPv3 traps, show ip arp inspection statistics, show port-security.',
+      counters:'All threats. First to see phishing beacons, ARP spoofing, VPN sprays, rogue APs, prompt-injected agents.',
+      guard:'Read-only. Can alert and tag, cannot change config.' } },
+  { id:'tracker', kind:'agent', glyph:'TRK', color:C.yellow, row:5, x:340, prow:5, px:146, label:'Tracker', sub:'attribute',
+    p:{ type:'Defender agent · Attribute', what:'Figures out what the bot is, where it sits and whether it is part of a bigger swarm.',
+      watches:'IP/ASN, user agent, TLS/TCP fingerprints, MAC↔IP↔port bindings, CAM and ARP tables, Web Bot Auth signatures for good bots.',
+      ccna:'show mac address-table, show ip dhcp snooping binding, show ip arp, traceroute, CDP/LLDP neighbors.',
+      counters:'Credential stuffing (groups sources by ASN), ARP spoofing (finds the port), rogue AP (finds the wired port if any).',
+      guard:'Read-only. Never probes systems you do not own.' } },
+  { id:'decoy', kind:'agent', glyph:'DCY', color:C.yellow, row:5, x:520, prow:5, px:243, label:'Decoy', sub:'honeypot',
+    p:{ type:'Defender agent · Deception', what:'Plants honey credentials, honeytoken URLs, canary instructions and a honeypot VLAN. Anything that touches them is a bot.',
+      watches:'Logins with honey accounts, hits on canary URLs, agents that obey hidden canary text.',
+      ccna:'Unused ports in a parking VLAN, ACL logging on honeypot hosts.',
+      counters:'Credential stuffing, scraping swarms, rogue AI agents following hidden instructions.',
+      guard:'Detect and log only. Never sends harmful instructions or attacks back.' } },
+  { id:'queen', kind:'agent', glyph:'Q', color:C.yellow, row:5, x:700, prow:6, px:195, label:'Queen', sub:'coordinator', big:true,
+    p:{ type:'Defender agent · Coordinator', what:'Runs the hive. Opens an incident, assigns agents, dedupes alerts and follows the playbook.',
+      watches:'Reports from every agent, incident state, approval queue.',
+      ccna:'Change management, playbooks, the order of operations: detect → contain → eradicate → recover.',
+      counters:'All. Keeps one bot from triggering five agents doing the same thing.',
+      guard:'No direct write access to devices. Every block goes through Auditor and a human.' } },
+  { id:'quar', kind:'agent', glyph:'QTN', color:C.yellow, row:5, x:880, prow:5, px:341, label:'Quarantine', sub:'contain',
+    p:{ type:'Defender agent · Contain', what:'Proposes the smallest action that stops the bot, then applies it once a human approves.',
+      watches:'Incidents assigned by Queen.',
+      ccna:'shutdown / err-disable a port, 802.1X CoA to quarantine VLAN 999, ACL deny, rate limits, revoke an agent token.',
+      counters:'Phished laptop (quarantine VLAN), ARP spoofer (port shut), VPN spray (edge ACL), hijacked agent (revoke token + egress ACL).',
+      guard:'Every block needs human approval. Actions are reversible and time-boxed.' } },
+  { id:'patch', kind:'agent', glyph:'PAT', color:C.yellow, row:5, x:1060, prow:6, px:70, label:'Patch', sub:'remediate',
+    p:{ type:'Defender agent · Remediate', what:'Cleans up after containment so the same bot cannot come back.',
+      watches:'Closed incidents, vuln feeds, dependency lockfiles.',
+      ccna:'IOS upgrades, config baselines, password/key rotation, removing unused services.',
+      counters:'Supply chain (pin and rotate), malware (rebuild host), VPN spray (enforce MFA), rogue AP (WPA3 + PMF).',
+      guard:'Opens change requests, never pushes to production without approval.' } },
+  { id:'auditor', kind:'agent', glyph:'AUD', color:C.yellow, row:5, x:1240, prow:6, px:320, label:'Auditor', sub:'human-in-loop',
+    p:{ type:'Defender agent · Human in the loop', what:'The approval gate and the audit log. Shows a human what Quarantine wants to do and why.',
+      watches:'Every proposed action, every approval, every agent decision.',
+      ccna:'AAA accounting, privilege levels, role-based CLI views, logging every config change.',
+      counters:'Guards against the swarm itself going rogue (OWASP ASI10) and against bad auto-blocks.',
+      guard:'Append-only audit log. No offensive actions, ever. Scope is limited to assets you own.' } },
 ];
 
-const L = [
-  {a:'cable',   b:'swa',    t:'solid', c:'#ff8c00'},
-  {a:'sfp',     b:'swd',    t:'solid', c:'#ff8c00'},
-  {a:'rack',    b:'swd',    t:'solid', c:'#ff8c00'},
-  {a:'swa',     b:'swd',    t:'trunk', c:'#00c8ff', lb:'802.1Q trunk'},
-  {a:'swd',     b:'router', t:'trunk', c:'#00c8ff'},
-  {a:'stp',     b:'swa',    t:'dashed',c:'#00c8ff'},
-  {a:'etha',    b:'swd',    t:'dashed',c:'#00c8ff'},
-  {a:'router',  b:'internet',t:'flow', c:'#39ff6a', lb:'default route'},
-  {a:'router',  b:'ospf',   t:'flow',  c:'#39ff6a'},
-  {a:'router',  b:'bgp',    t:'flow',  c:'#39ff6a'},
-  {a:'nat',     b:'router', t:'dashed',c:'#39ff6a'},
-  {a:'dhcp',    b:'swd',    t:'dashed',c:'#39ff6a'},
-  {a:'dns',     b:'router', t:'dashed',c:'#39ff6a'},
-  {a:'bgp',     b:'internet',t:'flow', c:'#39ff6a'},
-  {a:'ospf',    b:'swd',    t:'dashed',c:'#39ff6a'},
-  {a:'fw',      b:'router', t:'flow',  c:'#bb66ff', lb:'zone-based'},
-  {a:'acl',     b:'router', t:'dashed',c:'#bb66ff'},
-  {a:'vpn',     b:'internet',t:'flow', c:'#bb66ff', lb:'IPsec tunnel'},
-  {a:'aaa',     b:'fw',     t:'dashed',c:'#bb66ff'},
-  {a:'dai',     b:'swa',    t:'dashed',c:'#bb66ff'},
-  {a:'wlc',     b:'swd',    t:'flow',  c:'#00ffe7', lb:'CAPWAP'},
-  {a:'ap',      b:'wlc',    t:'flow',  c:'#00ffe7'},
-  {a:'wpa',     b:'ap',     t:'dashed',c:'#00ffe7'},
-  {a:'dnac',    b:'router', t:'flow',  c:'#ffe600', lb:'REST API'},
-  {a:'dnac',    b:'swd',    t:'flow',  c:'#ffe600'},
-  {a:'ansible', b:'dnac',   t:'dashed',c:'#ffe600'},
-  {a:'rest',    b:'dnac',   t:'dashed',c:'#ffe600'},
-  {a:'netconf', b:'router', t:'dashed',c:'#ffe600'},
-  {a:'python',  b:'swd',    t:'dashed',c:'#ffe600'},
+const EDGES = [
+  ['inet','edge'], ['inet','cloud'], ['edge','fw'], ['fw','vpn'], ['fw','core'], ['vpn','aaa'],
+  ['core','wlc'], ['core','aaa'], ['core','swa'], ['core','swb'], ['wlc','ap'], ['ap','wifi'],
+  ['swa','lap'], ['swb','agenthost'], ['swb','srv'], ['aaa','siem',1], ['cloud','agenthost',2,'logical'],
 ];
 
-// ── GRID ──────────────────────────────────────────────────────────
-const bgC = document.getElementById('canvas-bg');
-const bgX = bgC.getContext('2d');
-function drawGrid(){
-  bgC.width=window.innerWidth; bgC.height=window.innerHeight;
-  bgX.strokeStyle='rgba(0,160,255,0.04)'; bgX.lineWidth=1;
-  const s=44;
-  for(let x=0;x<bgC.width;x+=s){bgX.beginPath();bgX.moveTo(x,0);bgX.lineTo(x,bgC.height);bgX.stroke();}
-  for(let y=0;y<bgC.height;y+=s){bgX.beginPath();bgX.moveTo(0,y);bgX.lineTo(bgC.width,y);bgX.stroke();}
-  bgX.fillStyle='rgba(0,180,255,0.1)';
-  for(let x=0;x<bgC.width;x+=s) for(let y=0;y<bgC.height;y+=s){bgX.beginPath();bgX.arc(x,y,1,0,Math.PI*2);bgX.fill();}
-}
-drawGrid();
+const THREATS = {
+  phish: { name:'AI phishing + deepfake voice', short:'Phish-bot', path:['inet','edge','fw','core','swa','lap'], detectAt:5,
+    src:['fbi','anth'], agents:['sentinel','tracker','quar','patch'],
+    info:'An LLM writes a tailored lure, followed up by a cloned-voice call. The laptop opens it and starts beaconing out.',
+    log:{ detect:'beacon from VLAN10 host to new domain every 60s (NetFlow + DNS)', track:'domain registered 2 days ago, same lure seen on 3 inboxes',
+      propose:'move laptop port to quarantine VLAN 999 via 802.1X CoA', fix:'reset user creds, enforce phishing-resistant MFA' } },
+  rogueap: { name:'Rogue AP / evil twin', short:'Evil-twin', path:[{near:'ap',dx:-0.9,dy:0.55},'wifi'], detectAt:1,
+    src:[], agents:['sentinel','tracker','decoy','quar','patch'],
+    info:'A fake AP broadcasts your SSID next to the building to harvest Wi-Fi logins.',
+    log:{ detect:'WLC rogue alarm: SSID "CORP" from unknown BSSID', track:'not seen on any switch port (air-only rogue), signal strongest near AP-1',
+      propose:'notify facilities + keep clients on PMF, no over-the-air jamming', fix:'confirm WPA3-Enterprise + cert pinning on all clients' } },
+  arp: { name:'ARP spoofing (MITM)', short:'ARP-bot', path:[{near:'lap',dx:0.55,dy:0.5},'lap','swa','core'], detectAt:2,
+    src:[], agents:['sentinel','tracker','quar','patch'],
+    info:'A compromised device on VLAN 10 claims to be the default gateway so it can sit in the middle.',
+    log:{ detect:'DAI dropped 412 ARP replies on Gi1/0/5 (no snooping binding)', track:'MAC aaaa.bbbb.cccc on Gi1/0/5, VLAN 10 (sim)',
+      propose:'err-disable Gi1/0/5 for 30 min', fix:'reimage host, keep DAI + DHCP snooping on VLAN 10,20' } },
+  inject: { name:'Prompt injection / MCP tool poisoning', short:'Inject-bot', path:['inet','cloud','agenthost'], detectAt:2,
+    src:['inv','owasp','newstack'], agents:['sentinel','decoy','tracker','quar','patch'],
+    info:'Hidden instructions in a web page or MCP tool description tell your AI agent to send secrets out.',
+    log:{ detect:'agent tool call: read ~/.ssh then POST to unknown host', track:'instruction came from a poisoned MCP tool description',
+      propose:'revoke agent token + VLAN30 egress ACL to allowlist only', fix:'pin MCP server versions, require approval for file+network tools' } },
+  cred: { name:'Credential stuffing at VPN', short:'Stuff-bot', path:['inet','edge','fw','vpn'], detectAt:3,
+    src:['grey','imperva'], agents:['sentinel','decoy','tracker','quar','patch'],
+    info:'A bot swarm sprays leaked username/password pairs at the VPN portal from thousands of IPs.',
+    log:{ detect:'VPN auth failures 40x baseline in 5 min (AAA accounting)', track:'sources cluster in 2 hosting ASNs, same TCP fingerprint (sim)',
+      propose:'rate-limit + temporary edge ACL for the 2 ASNs, 1 hour', fix:'MFA on every VPN account, rotate any reused passwords' } },
+  malware: { name:'LLM-assisted mutating malware', short:'Mutant-bot', path:['srv','swb','core','fw'], detectAt:3,
+    src:['gtig'], agents:['sentinel','tracker','quar','patch'],
+    info:'Malware on a server asks an LLM API to rewrite itself or generate commands, so signatures miss it.',
+    log:{ detect:'server in VLAN 40 called an LLM API it never used before (egress log)', track:'process: script host, new hash every hour',
+      propose:'block VLAN40 → LLM API at firewall, isolate host', fix:'rebuild host, egress allowlist for AI APIs' } },
+};
+const DEMO_ORDER = ['cred','phish','inject','arp','rogueap','malware'];
 
-// ── VIEWPORT ──────────────────────────────────────────────────────
-const svg=document.getElementById('diagram-svg');
-const world=document.getElementById('world');
-let vx=0,vy=0,sc=1,panning=false,ps={x:0,y:0};
+const AGENT_TXT = { sentinel:'SENTINEL', tracker:'TRACKER', decoy:'DECOY', queen:'QUEEN', quar:'QUARANTINE', patch:'PATCH', auditor:'AUDITOR' };
 
-function applyVP(){ world.setAttribute('transform',`translate(${vx},${vy}) scale(${sc})`); }
-function resetView(){
-  sc=Math.min(window.innerWidth,window.innerHeight)/1050;
-  vx=window.innerWidth/2; vy=window.innerHeight/2; applyVP();
-}
-resetView();
+/* ============================================================
+   LAYOUT
+   ============================================================ */
+const svg = document.getElementById('svg');
+const world = document.getElementById('world');
+const G = { bands:gid('gbands'), edges:gid('gedges'), hive:gid('ghive'), nodes:gid('gnodes'), sim:gid('gsim') };
+function gid(i){ return document.getElementById(i); }
+const NS = 'http://www.w3.org/2000/svg';
+function el(tag, attrs, parent){ const e=document.createElementNS(NS,tag); for(const k in attrs) e.setAttribute(k,attrs[k]); if(parent) parent.appendChild(e); return e; }
 
-// Pan — only when NOT clicking a node group
-svg.addEventListener('mousedown',e=>{
-  if(e.target.closest('#gn')) return; // nodes handle their own click
-  panning=true; ps={x:e.clientX-vx,y:e.clientY-vy};
-  svg.classList.add('drag'); e.preventDefault();
-});
-window.addEventListener('mousemove',e=>{ if(!panning) return; vx=e.clientX-ps.x; vy=e.clientY-ps.y; applyVP(); });
-window.addEventListener('mouseup',()=>{ panning=false; svg.classList.remove('drag'); });
+let L = null;             // current layout
+let view = { k:1, x:0, y:0 };
+let fitK = 1;
+const byId = {}; NODES.forEach(n => byId[n.id]=n);
 
-svg.addEventListener('wheel',e=>{
-  e.preventDefault();
-  sc=Math.max(0.25,Math.min(3.5,sc*(e.deltaY<0?1.1:0.91))); applyVP();
-},{passive:false});
-
-document.getElementById('bzi').onclick=()=>{ sc=Math.min(3.5,sc*1.2); applyVP(); };
-document.getElementById('bzo').onclick=()=>{ sc=Math.max(0.25,sc*0.82); applyVP(); };
-document.getElementById('bzr').onclick=resetView;
-
-// ── BUILD SVG ─────────────────────────────────────────────────────
-const gl=document.getElementById('gl');
-const gn=document.getElementById('gn');
-const nm={};
-N.forEach(n=>nm[n.id]=n);
-
-const arrowMap={'#39ff6a':'ag','#00c8ff':'ab','#ff8c00':'ao','#bb66ff':'ap','#00ffe7':'ac','#ffe600':'ay'};
-const lpaths=[];
-
-// Links
-L.forEach(lk=>{
-  const a=nm[lk.a],b=nm[lk.b];
-  if(!a||!b) return;
-  const dx=b.x-a.x,dy=b.y-a.y;
-  const cx=(a.x+b.x)/2-dy*0.13, cy=(a.y+b.y)/2+dx*0.13;
-  const d=`M${a.x},${a.y} Q${cx},${cy} ${b.x},${b.y}`;
-  const path=document.createElementNS('http://www.w3.org/2000/svg','path');
-  path.setAttribute('d',d); path.setAttribute('fill','none'); path.setAttribute('stroke',lk.c);
-  path.style.pointerEvents='none';
-  if(lk.t==='solid'){ path.setAttribute('stroke-width','2'); path.setAttribute('stroke-opacity','0.5'); }
-  else if(lk.t==='trunk'){ path.setAttribute('stroke-width','3'); path.setAttribute('stroke-opacity','0.65'); }
-  else if(lk.t==='dashed'){ path.setAttribute('stroke-width','1.5'); path.setAttribute('stroke-opacity','0.42');
-    path.setAttribute('stroke-dasharray','6 5'); path.style.animation=`flow ${1.8+Math.random()*2}s linear infinite`; }
-  else if(lk.t==='flow'){ path.setAttribute('stroke-width','2'); path.setAttribute('stroke-opacity','0.6');
-    path.setAttribute('stroke-dasharray','10 6'); path.style.animation=`flow ${1.2+Math.random()*1.5}s linear infinite`;
-    path.setAttribute('marker-end',`url(#${arrowMap[lk.c]||'ab'})`); }
-  gl.appendChild(path);
-  if(lk.lb){ const t=document.createElementNS('http://www.w3.org/2000/svg','text');
-    t.setAttribute('x',cx); t.setAttribute('y',cy-8); t.setAttribute('text-anchor','middle');
-    t.setAttribute('fill',lk.c); t.setAttribute('font-family','Share Tech Mono,monospace');
-    t.setAttribute('font-size','9'); t.setAttribute('opacity','0.6'); t.style.pointerEvents='none';
-    t.textContent=lk.lb; gl.appendChild(t); }
-  lpaths.push({ax:a.x,ay:a.y,bx:b.x,by:b.y,cx,cy,color:lk.c});
-});
-
-// Nodes
-N.forEach(node=>{
-  const g=document.createElementNS('http://www.w3.org/2000/svg','g');
-  g.setAttribute('data-id',node.id); g.setAttribute('data-layer',node.ly);
-  g.style.cursor='pointer';
-
-  const halo=document.createElementNS('http://www.w3.org/2000/svg','circle');
-  halo.setAttribute('cx',node.x); halo.setAttribute('cy',node.y); halo.setAttribute('r',node.r+10);
-  halo.setAttribute('fill','none'); halo.setAttribute('stroke',node.c); halo.setAttribute('stroke-width','1');
-  halo.setAttribute('opacity','0.17'); halo.style.pointerEvents='none';
-
-  const circ=document.createElementNS('http://www.w3.org/2000/svg','circle');
-  circ.setAttribute('cx',node.x); circ.setAttribute('cy',node.y); circ.setAttribute('r',node.r);
-  circ.setAttribute('fill','rgba(2,11,20,0.9)'); circ.setAttribute('stroke',node.c); circ.setAttribute('stroke-width','2');
-
-  const tint=document.createElementNS('http://www.w3.org/2000/svg','circle');
-  tint.setAttribute('cx',node.x); tint.setAttribute('cy',node.y); tint.setAttribute('r',node.r-3);
-  tint.setAttribute('fill',node.c); tint.setAttribute('fill-opacity','0.07'); tint.style.pointerEvents='none';
-
-  const icon=document.createElementNS('http://www.w3.org/2000/svg','text');
-  icon.setAttribute('x',node.x); icon.setAttribute('y',node.y-node.r*0.15);
-  icon.setAttribute('text-anchor','middle'); icon.setAttribute('dominant-baseline','middle');
-  icon.setAttribute('font-size',node.r>40?'20':'15'); icon.style.pointerEvents='none';
-  icon.textContent=node.ic;
-
-  node.lb.split('\n').forEach((line,i)=>{
-    const t=document.createElementNS('http://www.w3.org/2000/svg','text');
-    t.setAttribute('x',node.x); t.setAttribute('y',node.y+node.r*0.35+i*11);
-    t.setAttribute('text-anchor','middle'); t.setAttribute('fill',node.c);
-    t.setAttribute('font-family','Exo 2,sans-serif'); t.setAttribute('font-weight','700');
-    t.setAttribute('font-size',node.r>40?'10':'8.5'); t.setAttribute('letter-spacing','0.8');
-    t.style.pointerEvents='none'; t.textContent=line; g.appendChild(t);
-  });
-
-  const sub=document.createElementNS('http://www.w3.org/2000/svg','text');
-  sub.setAttribute('x',node.x); sub.setAttribute('y',node.y+node.r+13);
-  sub.setAttribute('text-anchor','middle'); sub.setAttribute('fill','rgba(255,255,255,0.36)');
-  sub.setAttribute('font-family','Share Tech Mono,monospace'); sub.setAttribute('font-size','7.5');
-  sub.style.pointerEvents='none'; sub.textContent=node.sb;
-
-  g.appendChild(halo); g.appendChild(circ); g.appendChild(tint); g.appendChild(icon); g.appendChild(sub);
-
-  g.addEventListener('mouseenter',()=>{ circ.setAttribute('stroke-width','3.5'); halo.setAttribute('opacity','0.38'); tint.setAttribute('fill-opacity','0.16'); });
-  g.addEventListener('mouseleave',()=>{ circ.setAttribute('stroke-width','2'); halo.setAttribute('opacity','0.17'); tint.setAttribute('fill-opacity','0.07'); });
-
-  // CLICK — this is the key fix: stopPropagation prevents panning interference
-  g.addEventListener('click', e=>{
-    e.stopPropagation();
-    document.getElementById('pl').textContent = node.i.l;
-    document.getElementById('pt').textContent = node.i.t;
-    document.getElementById('pt').style.color = node.c;
-    document.getElementById('pb').innerHTML   = node.i.b;
-    document.getElementById('pc').textContent = node.i.c;
-    document.getElementById('panel').classList.add('show');
-  });
-
-  gn.appendChild(g);
-});
-
-// Close panel
-document.getElementById('pclose').addEventListener('click',()=>document.getElementById('panel').classList.remove('show'));
-svg.addEventListener('click',e=>{ if(!e.target.closest('#gn')) document.getElementById('panel').classList.remove('show'); });
-
-// ── LAYER TOGGLES ─────────────────────────────────────────────────
-const activeLayers=new Set(N.map(n=>n.ly));
-document.querySelectorAll('.lbtn').forEach(btn=>{
-  btn.addEventListener('click',()=>{
-    const ly=btn.dataset.l;
-    if(activeLayers.has(ly)){ activeLayers.delete(ly); btn.classList.replace('on','off'); }
-    else { activeLayers.add(ly); btn.classList.replace('off','on'); }
-    document.querySelectorAll('#gn > g').forEach(g=>{
-      const ok=activeLayers.has(g.dataset.layer);
-      g.style.opacity=ok?'1':'0.06'; g.style.pointerEvents=ok?'all':'none';
-    });
-  });
-});
-
-// ── PARTICLES ─────────────────────────────────────────────────────
-const pC=document.getElementById('canvas-particles');
-const pX=pC.getContext('2d');
-function resizePC(){ pC.width=window.innerWidth; pC.height=window.innerHeight; }
-resizePC();
-
-class Dot {
-  constructor(){ this.reset(); }
-  reset(){
-    const lk=lpaths[Math.floor(Math.random()*lpaths.length)];
-    Object.assign(this,lk); this.t=0;
-    this.speed=0.003+Math.random()*0.007;
-    this.sz=1.5+Math.random()*2;
+function computeLayout(){
+  const phone = window.innerWidth < 760;
+  if (!phone) {
+    const rowsY = [95, 215, 335, 455, 575, 740];
+    return { phone, W:1400, H:820, r:30, rq:38, unit:120, rowsY,
+      bands:[ ['INTERNET',35,155], ['EDGE',155,275], ['CORE',275,395], ['ACCESS L2',395,515], ['ENDPOINTS',515,640], ['DEFENDER HIVE',650,815] ],
+      pos:n => ({ x:n.x, y:rowsY[n.row] }) };
   }
-  step(){ this.t+=this.speed; if(this.t>1) this.reset(); }
-  get pos(){
-    const t=this.t;
-    return {
-      x:(1-t)*(1-t)*this.ax+2*(1-t)*t*this.cx+t*t*this.bx,
-      y:(1-t)*(1-t)*this.ay+2*(1-t)*t*this.cy+t*t*this.by
-    };
-  }
+  const rowsY = [130, 210, 290, 370, 450, 562, 648];
+  return { phone, W:390, H:700, r:20, rq:24, unit:80, rowsY,
+    bands:[ ['INTERNET',92,170], ['EDGE',170,250], ['CORE',250,330], ['ACCESS',330,410], ['ENDPOINT',410,500], ['DEFENDER HIVE',512,698] ],
+    pos:n => ({ x:n.px, y:rowsY[n.prow] }) };
 }
 
-const dots=Array.from({length:55},()=>new Dot());
+function fit(){
+  const W = window.innerWidth, H = window.innerHeight;
+  if (!L.phone) {
+    const top = 70, bottom = (SIM && SIM.running) ? 186 : 16;   // during the sim a bottom strip holds the event log
+    fitK = Math.min((W-40)/L.W, (H-top-bottom)/(L.H-30));
+    view.k = fitK; view.x = (W - L.W*fitK)/2; view.y = top - 30*fitK;
+  } else {
+    const hud = document.getElementById('hud').offsetHeight, reserve = (SIM && SIM.running) ? 106 : 52;
+    fitK = Math.min(W / L.W, (H - hud - reserve) / (L.H - 88)); view.k = fitK; view.x = (W - L.W*fitK)/2; view.y = (hud + 2) - 88*fitK;
+  }
+  applyView();
+}
+function applyView(){ world.setAttribute('transform', `translate(${view.x},${view.y}) scale(${view.k})`); }
+
+function build(){
+  L = computeLayout();
+  Object.values(G).forEach(g => g.innerHTML='');
+  NODES.forEach(n => { n.pos = L.pos(n); });
+  fit();
+  const fs = (L.phone?13:14.5)/fitK, fsSub = 13/fitK, fsBand = (L.phone?11.5:12)/fitK;   // screen-px sizes at default zoom
+  L.fs = fs;
+
+  // bands
+  L.bands.forEach(([name,y0,y1],i) => {
+    const hive = name.startsWith('DEFENDER');
+    el('rect',{ x:6, y:y0, width:L.W-12, height:y1-y0-6, rx:12, fill: hive?'rgba(255,230,0,.035)':'rgba(0,200,255,.025)',
+      stroke: hive?'rgba(255,230,0,.22)':'rgba(0,200,255,.12)', 'stroke-dasharray':'4 6' }, G.bands);
+    const cy=(y0+y1-6)/2, bx = L.phone ? 6+fsBand*0.8 : L.W-16;
+    const t = el('text',{ x:0, y:0, class:'band-l', 'font-size':fsBand, 'text-anchor':'middle', transform:`translate(${bx},${cy}) rotate(-90)` }, G.bands);
+    t.textContent = name;
+    if (hive) t.setAttribute('fill','rgba(255,230,0,.7)');
+  });
+
+  // edges
+  EDGES.forEach(([a,b,bend,kind]) => {
+    const p1 = byId[a].pos, p2 = byId[b].pos;
+    const d = curve(p1,p2,bend||0);
+    const col = kind==='logical' ? 'rgba(255,95,210,.55)' : 'rgba(0,200,255,.45)';
+    el('path',{ d, fill:'none', stroke:col, 'stroke-width':2, class:'edge', 'data-a':a, 'data-b':b }, G.edges);
+    el('path',{ d, fill:'none', stroke:kind==='logical'?C.pink:C.cyan, 'stroke-width':2, 'stroke-dasharray':'3 11', class:'edge flow', opacity:.7, 'data-a':a, 'data-b':b }, G.edges);
+  });
+
+  // hive links: queen to every agent
+  const q = byId.queen.pos;
+  NODES.filter(n=>n.kind==='agent' && n.id!=='queen').forEach(n => {
+    el('path',{ d:curve(q,n.pos,L.phone?0:0.6), fill:'none', stroke:'rgba(255,230,0,.35)', 'stroke-width':1.6, 'stroke-dasharray':'5 6', class:'hlink', id:'hl-'+n.id }, G.hive);
+  });
+
+  // nodes
+  NODES.forEach(n => {
+    const r = n.big ? L.rq : L.r;
+    const g = el('g',{ class:'node', transform:`translate(${n.pos.x},${n.pos.y})`, 'data-id':n.id, 'data-kind':n.kind, tabindex:0, role:'button', 'aria-label':n.label }, G.nodes);
+    n.g = g;
+    if (n.kind==='agent') {
+      el('polygon',{ points:hex(r+7), fill:'none', stroke:n.color, 'stroke-opacity':.25, 'stroke-width':1.5 }, g);
+      el('polygon',{ points:hex(r), fill:'rgba(30,26,0,.92)', stroke:n.color, 'stroke-width':2.2, class:'ring', filter:'url(#glow)' }, g);
+    } else {
+      el('circle',{ r:r+7, fill:'none', stroke:n.color, 'stroke-opacity':.22, 'stroke-width':1.5 }, g);
+      el('circle',{ r, fill:'rgba(2,16,30,.95)', stroke:n.color, 'stroke-width':2.2, class:'ring', filter:'url(#glow)' }, g);
+    }
+    const gl = el('text',{ class:'nglyph', fill:n.color, 'font-size': Math.min(r*0.62, (n.glyph.length>2? r*0.56 : r*0.75)) }, g); gl.textContent = n.glyph;
+    const lab = el('text',{ class:'nlabel', 'text-anchor':'middle', y:r+7+fs, 'font-size':fs }, g); lab.textContent = (L.phone && n.pl) ? n.pl : n.label;
+    if (!L.phone) { const s = el('text',{ class:'nsub', 'text-anchor':'middle', y:r+9+fs+fsSub, 'font-size':fsSub }, g); s.textContent = n.sub; }
+    const ring = el('circle',{ r:r+12, fill:'none', stroke:n.color, 'stroke-width':3, opacity:0, class:'alertring' }, g);
+    n.alert = ring;
+    g.addEventListener('click', e => { e.stopPropagation(); openPanel(n.id); });
+    g.addEventListener('keydown', e => { if (e.key==='Enter') openPanel(n.id); });
+  });
+  applyLayers();
+  if (SIM.running) SIM.rebuild();
+}
+function hex(r){ let s=''; for(let i=0;i<6;i++){ const a=Math.PI/3*i+Math.PI/6; s+=`${(r*Math.cos(a)).toFixed(1)},${(r*Math.sin(a)).toFixed(1)} `; } return s; }
+function curve(p1,p2,bend){
+  if (!bend) return `M${p1.x},${p1.y} L${p2.x},${p2.y}`;
+  const mx=(p1.x+p2.x)/2, my=(p1.y+p2.y)/2, dx=p2.x-p1.x, dy=p2.y-p1.y;
+  const len=Math.hypot(dx,dy)||1, off=len*0.18*bend;
+  return `M${p1.x},${p1.y} Q${mx - dy/len*off},${my + dx/len*off} ${p2.x},${p2.y}`;
+}
+
+/* ============================================================
+   LAYERS / PANEL
+   ============================================================ */
+const layers = { net:true, agent:true };
+document.querySelectorAll('[data-layer]').forEach(b => b.addEventListener('click', () => {
+  const k=b.dataset.layer; layers[k]=!layers[k]; b.classList.toggle('on',layers[k]); b.classList.toggle('off',!layers[k]); applyLayers();
+}));
+function applyLayers(){
+  NODES.forEach(n => n.g && n.g.classList.toggle('dim', !layers[n.kind]));
+  document.querySelectorAll('.edge').forEach(e => e.classList.toggle('dim', !layers.net));
+  document.querySelectorAll('.hlink').forEach(e => e.classList.toggle('dim', !layers.agent));
+}
+
+const panel = gid('panel'), pbody = gid('pbody');
+gid('pclose').onclick = closePanel;
+function srcList(keys){ if(!keys||!keys.length) return ''; return '<h5>Sources</h5><ul>'+keys.map(k=>`<li><a href="${SRC[k][1]}" target="_blank" rel="noopener">${SRC[k][0]}</a></li>`).join('')+'</ul>'; }
+function esc(s){ return String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+function openPanel(id){
+  const n = byId[id]; if (!n) return; const p = n.p; let h='';
+  h += `<div class="pk" style="color:${n.color}">${esc(p.type)}</div><div class="pt">${esc(n.label)}</div>`;
+  h += `<p>${esc(p.what)}</p>`;
+  if (n.kind==='agent') {
+    h += `<h5>Watches</h5><p>${esc(p.watches)}</p>`;
+    h += `<h5>CCNA tools it uses</h5><p>${esc(p.ccna)}</p>`;
+    h += `<h5>Counters</h5><p>${esc(p.counters)}</p>`;
+    h += `<h5>Guardrail</h5><p>${esc(p.guard)}</p>`;
+    const th = Object.entries(THREATS).filter(([k,t])=>t.agents.includes(id) || id==='queen' || id==='auditor').map(([k,t])=>`<span class="tag" style="color:${C.red}">${esc(t.short)}</span>`).join('');
+    if (th) h += `<h5>Battle sim roles</h5><div>${th}</div>`;
+    highlightAgent(id);
+  } else {
+    h += `<h5>CCNA concept</h5><p>${esc(p.ccna)}</p>`;
+    h += `<h5>Threats here</h5><ul>${p.threats.map(t=>`<li>${esc(t)}</li>`).join('')}</ul>`;
+    h += `<h5>Defense</h5><p>${esc(p.defense)}</p>`;
+    if (p.cfg) h += `<h5>Defensive config (study example)</h5><pre>${esc(p.cfg)}</pre>`;
+    h += srcList(p.src);
+    highlightAgent(null);
+  }
+  pbody.innerHTML = h; panel.classList.add('show'); panel.scrollTop = 0;
+}
+function openThreatPanel(key){
+  const t = THREATS[key]; let h='';
+  h += `<div class="pk" style="color:${C.red}">Rogue bot · simulated</div><div class="pt">${esc(t.name)}</div>`;
+  h += `<p>${esc(t.info)}</p>`;
+  h += `<h5>Path it tries</h5><p>${t.path.map(s=>typeof s==='string'?byId[s].label:'outside').map(esc).join(' → ')}</p>`;
+  h += `<h5>Swarm response</h5><ul><li><b>Sentinel:</b> ${esc(t.log.detect)}</li><li><b>Tracker:</b> ${esc(t.log.track)}</li><li><b>Quarantine (needs approval):</b> ${esc(t.log.propose)}</li><li><b>Patch:</b> ${esc(t.log.fix)}</li></ul>`;
+  h += srcList(t.src);
+  h += `<div class="simnote">SIMULATED · illustrative values, not live telemetry</div>`;
+  pbody.innerHTML = h; panel.classList.add('show'); panel.scrollTop = 0;
+}
+function closePanel(){ panel.classList.remove('show'); highlightAgent(null); }
+function highlightAgent(id){
+  document.querySelectorAll('.hlink').forEach(e => e.setAttribute('stroke', e.id==='hl-'+id ? C.yellow : 'rgba(255,230,0,.35)'));
+}
+
+/* ============================================================
+   PAN / ZOOM (mouse, wheel, touch pinch)
+   ============================================================ */
+const ptrs = new Map(); let pinch0 = null, dragged = false;
+svg.addEventListener('pointerdown', e => { ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY}); dragged=false; svg.classList.add('drag');
+  if (ptrs.size===2){ const [a,b]=[...ptrs.values()]; pinch0={ d:Math.hypot(a.x-b.x,a.y-b.y), k:view.k, x:view.x, y:view.y, cx:(a.x+b.x)/2, cy:(a.y+b.y)/2 }; } });
+window.addEventListener('pointermove', e => {
+  if (!ptrs.has(e.pointerId)) return; const prev = ptrs.get(e.pointerId); ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if (ptrs.size===2 && pinch0){ const [a,b]=[...ptrs.values()]; const d=Math.hypot(a.x-b.x,a.y-b.y); zoomAt(pinch0.cx,pinch0.cy, pinch0.k*d/pinch0.d / view.k); return; }
+  const dx=e.clientX-prev.x, dy=e.clientY-prev.y; if (Math.abs(dx)+Math.abs(dy)>2) dragged=true; view.x+=dx; view.y+=dy; applyView();
+});
+window.addEventListener('pointerup', e => { ptrs.delete(e.pointerId); if (ptrs.size<2) pinch0=null; if(!ptrs.size) svg.classList.remove('drag'); });
+window.addEventListener('pointercancel', e => { ptrs.delete(e.pointerId); pinch0=null; });
+svg.addEventListener('wheel', e => { e.preventDefault(); zoomAt(e.clientX,e.clientY, e.deltaY<0?1.12:1/1.12); }, {passive:false});
+svg.addEventListener('click', () => { if (!dragged) closePanel(); });
+function zoomAt(cx,cy,f){ const k=Math.max(fitK*0.4, Math.min(fitK*4, view.k*f)); const r=k/view.k; view.x=cx-(cx-view.x)*r; view.y=cy-(cy-view.y)*r; view.k=k; applyView(); }
+gid('zin').onclick = () => zoomAt(innerWidth/2, innerHeight/2, 1.25);
+gid('zout').onclick = () => zoomAt(innerWidth/2, innerHeight/2, 0.8);
+gid('zfit').onclick = fit;
+
+/* ============================================================
+   BATTLE SIMULATION (all bots + events are SIMULATED)
+   ============================================================ */
+const SIM = {
+  running:false, t:0, last:0, bots:[], drones:[], events:[], spawnIdx:0, nextSpawn:0.3, seq:0, logLines:[],
+  stats:{ det:0, appr:0, con:0 },
+  start(){
+    this.running=true; this.t=0; this.bots=[]; this.drones=[]; this.events=[]; this.spawnIdx=0; this.nextSpawn=0.3; this.seq=0;
+    this.stats={det:0,appr:0,con:0}; this.logLines=[]; gid('logl').innerHTML=''; G.sim.innerHTML='';
+    ['simbanner','stats','log'].forEach(i=>gid(i).classList.add('show')); document.body.classList.add('sim');
+    build();
+    gid('simbtn').textContent='■ Stop sim'; gid('simbtn').classList.add('running');
+    this.log('queen','Battle sim started. All bots and values below are SIMULATED.');
+    this.last=performance.now(); clearInterval(this.timer); this.timer=setInterval(tick, 33);
+  },
+  stop(){
+    this.running=false; clearInterval(this.timer); G.sim.innerHTML=''; ['simbanner','stats','log'].forEach(i=>gid(i).classList.remove('show'));
+    document.body.classList.remove('sim'); build();
+    gid('simbtn').textContent='▶ Battle sim'; gid('simbtn').classList.remove('running');
+    NODES.forEach(n=>n.alert && n.alert.setAttribute('opacity',0));
+  },
+  rebuild(){ G.sim.innerHTML=''; this.bots.forEach(b=>this.drawBot(b)); this.drones=[]; },
+  point(step){
+    if (typeof step==='string') return { ...byId[step].pos };
+    const n = byId[step.near].pos; return { x:Math.max(L.r*1.2, Math.min(L.W-L.r*3, n.x + step.dx*L.unit)), y:n.y + step.dy*L.unit };
+  },
+  spawn(key){
+    const th = THREATS[key]; const id = 'RB-' + String(++this.seq).padStart(2,'0');
+    const b = { id, key, th, seg:0, u:0, state:'moving', speed:1.0, born:this.t, pos:this.point(th.path[0]) };
+    this.drawBot(b); this.bots.push(b);
+    this.log('bot', `${id} ${th.short} (sim) spawned → ${th.name}`, C.red);
+  },
+  drawBot(b){
+    const g = el('g',{ class:'node', 'data-bot':b.id }, G.sim);
+    const s = L.r*0.62;
+    el('circle',{ r:s*1.9, fill:'rgba(255,59,92,.12)', stroke:'none', class:'aura' }, g);
+    el('rect',{ x:-s/1.4, y:-s/1.4, width:s*1.41, height:s*1.41, transform:'rotate(45)', fill:'rgba(60,0,12,.95)', stroke:C.red, 'stroke-width':2.2, filter:'url(#glow)', class:'body' }, g);
+    const t = el('text',{ class:'nglyph', fill:C.red, 'font-size':s*0.85 }, g); t.textContent='!';
+    const lab = el('text',{ class:'nlabel', 'text-anchor':'start', x:s*1.5, y:(this.seq%2 ? -s*0.9 : s*2.1), 'font-size':L.fs*0.92, fill:C.red }, g); lab.textContent = `${b.th.short} (sim)`;
+    lab.style.fill = '#ff8da0';
+    g.addEventListener('click', e => { e.stopPropagation(); openThreatPanel(b.key); });
+    b.g = g; b.glyph = t; b.lab = lab; if (L.phone) lab.style.display = 'none';
+  },
+  log(who, msg, color){
+    const mm = Math.floor(this.t/60), ss = Math.floor(this.t%60);
+    const ts = `T+${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
+    const name = who==='bot' ? 'ROGUE' : AGENT_TXT[who];
+    const col = color || (who==='bot'?C.red:C.yellow);
+    this.logLines.unshift(`<div><span class="t">${ts}</span> <b style="color:${col}">${name}</b> ${esc(msg)}</div>`);
+    this.logLines = this.logLines.slice(0, 9);
+    gid('logl').innerHTML = this.logLines.join('');
+  },
+  at(delay, fn){ this.events.push({ t:this.t+delay, fn }); },
+  dispatch(agentId, bot, color){
+    const from = { ...byId[agentId].pos };
+    const g = el('g',{}, G.sim);
+    const s = L.r*0.32;
+    el('polygon',{ points:`0,${-s} ${s*0.9},${s*0.7} ${-s*0.9},${s*0.7}`, fill:color||C.yellow, filter:'url(#glow)' }, g);
+    const trail = el('line',{ x1:from.x, y1:from.y, x2:from.x, y2:from.y, stroke:color||C.yellow, 'stroke-width':1.5, 'stroke-opacity':.45, 'stroke-dasharray':'4 5' }, G.sim);
+    G.sim.appendChild(g);
+    this.drones.push({ g, trail, from, bot, u:0, ang:Math.random()*6.28, agent:agentId });
+    const n = byId[agentId]; this.flash(n);
+  },
+  flash(n){ n.alert.setAttribute('opacity',.9); n.alertT = this.t + 1.2; },
+  detect(b){
+    b.state='detected'; b.speed=0.25; this.stats.det++;
+    const th=b.th, inc='INC-'+b.id.slice(3);
+    const where = byId[typeof th.path[b.seg]==='string' ? th.path[b.seg] : th.path[th.path.length-1]];
+    this.flash(where);
+    this.log('sentinel', `${b.id}: ${th.log.detect}`);
+    this.dispatch('sentinel', b);
+    this.at(0.5, ()=>{ this.log('queen', `${inc} opened for ${b.id}, tasking ${th.agents.filter(a=>a!=='sentinel').map(a=>AGENT_TXT[a]).join(', ')}`); this.flash(byId.queen);
+      th.agents.forEach(a=>{ const hl=gid('hl-'+a); if(hl){ hl.setAttribute('stroke',C.yellow); setTimeout(()=>hl.setAttribute('stroke','rgba(255,230,0,.35)'),900); } }); });
+    this.at(1.1, ()=>{ this.log('tracker', `${b.id}: ${th.log.track}`); this.dispatch('tracker', b); });
+    if (th.agents.includes('decoy')) this.at(1.6, ()=>{ this.log('decoy', `${b.id}: ${th.key==='cred'?'honey account "svc-backup" tried, confirms bot':th.key==='inject'?'canary instruction followed, agent is hijacked':'honey SSID probe logged'}`); this.dispatch('decoy', b); });
+    this.at(2.2, ()=>{ b.state='pending'; this.stats.appr++; this.log('quar', `${b.id}: proposes ${th.log.propose}`); this.log('auditor', `${inc}: waiting for human approval…`, C.pink); this.flash(byId.auditor); this.flash(byId.quar); });
+    this.at(3.6, ()=>{ this.stats.appr--; this.log('auditor', `${inc}: analyst APPROVED (simulated). Logged to audit trail.`, C.pink);
+      this.contain(b); this.dispatch('quar', b, C.green); });
+    this.at(4.8, ()=>{ this.log('patch', `${b.id}: ${th.log.fix}`); this.dispatch('patch', b, C.cyan); });
+    this.at(6.5, ()=>{ this.log('queen', `${inc} closed. Contained, remediated, reviewed.`); b.state='done'; });
+  },
+  contain(b){
+    b.state='contained'; b.speed=0; this.stats.con++;
+    b.g.querySelector('.body').setAttribute('stroke', '#7a8a99'); b.g.querySelector('.body').setAttribute('fill','rgba(30,36,44,.95)');
+    b.g.querySelector('.aura').setAttribute('fill','rgba(57,255,106,.10)');
+    b.glyph.textContent='✕'; b.glyph.setAttribute('fill','#9fb0c0');
+    b.lab.textContent = `${b.th.short} contained`; b.lab.style.fill = C.green;
+    const ring = el('circle',{ r:L.r*1.35, fill:'none', stroke:C.green, 'stroke-width':2.5, 'stroke-dasharray':'6 5' }, b.g);
+    b.ring = ring;
+  },
+  step(dt){
+    this.t += dt;
+    if (this.t >= this.nextSpawn) {
+      if (this.spawnIdx < DEMO_ORDER.length) { this.spawn(DEMO_ORDER[this.spawnIdx++]); this.nextSpawn = this.t + 1.6; }
+      else if (this.bots.every(b=>b.state==='done')) { // loop
+        this.bots.forEach(b=>b.g.remove()); this.bots=[]; this.spawnIdx=0; this.nextSpawn=this.t+1.5;
+        this.log('queen','Field clear. Next simulated wave in a moment.'); }
+    }
+    // events
+    const due = this.events.filter(e=>e.t<=this.t); this.events = this.events.filter(e=>e.t>this.t); due.forEach(e=>e.fn());
+    // bots
+    for (const b of this.bots) {
+      const path = b.th.path;
+      if (b.speed>0 && b.seg < path.length-1) {
+        const a=this.point(path[b.seg]), c=this.point(path[b.seg+1]);
+        const len = Math.hypot(c.x-a.x, c.y-a.y)||1;
+        b.u += dt * b.speed * (L.unit*1.25) / len;
+        if (b.u>=1){ b.u=0; b.seg++; }
+        const a2=this.point(path[b.seg]), c2=this.point(path[Math.min(b.seg+1,path.length-1)]);
+        b.pos = { x:a2.x+(c2.x-a2.x)*b.u, y:a2.y+(c2.y-a2.y)*b.u };
+      }
+      if (b.state==='moving' && b.seg >= b.th.detectAt) this.detect(b);
+      if (b.state==='moving' && b.seg >= path.length-1) this.detect(b);
+      // offset so bot sits beside the node, not on top of it
+      const off = L.r*1.15;
+      const bx = b.pos.x + off*0.8, by = b.pos.y - off*0.8;
+      b.g.setAttribute('transform', `translate(${bx},${by})`);
+      b.draw = { x:bx, y:by };
+      const right = bx > L.W*0.62, s = L.r*0.62;
+      if (b.side !== right){ b.side = right; b.lab.setAttribute('text-anchor', right?'end':'start'); b.lab.setAttribute('x', right? -s*1.5 : s*1.5); }
+    }
+    // drones: fly to bot, then orbit
+    for (const d of this.drones) {
+      const tgt = d.bot.draw || d.bot.pos;
+      d.u = Math.min(1, d.u + dt/0.9);
+      const e = 1-Math.pow(1-d.u,3);
+      let x = d.from.x + (tgt.x-d.from.x)*e, y = d.from.y + (tgt.y-d.from.y)*e;
+      if (d.u>=1){ d.ang += dt*2.4; const R=L.r*1.05; x = tgt.x + Math.cos(d.ang)*R; y = tgt.y + Math.sin(d.ang)*R; }
+      d.g.setAttribute('transform', `translate(${x},${y}) rotate(${(d.ang*57)%360})`);
+      d.trail.setAttribute('x2', x); d.trail.setAttribute('y2', y);
+      d.trail.setAttribute('stroke-opacity', d.bot.state==='done' ? 0 : .45);
+      if (d.bot.state==='done') d.g.setAttribute('opacity', 0);
+    }
+    this.drones = this.drones.filter(d => { if (d.bot.state==='done' && !d.bot.g.isConnected){ d.g.remove(); d.trail.remove(); return false; } return true; });
+    // fade alert rings
+    NODES.forEach(n=>{ if (n.alertT && this.t>n.alertT){ n.alert.setAttribute('opacity',0); n.alertT=0; } });
+    gid('s-bots').textContent = this.bots.filter(b=>b.state!=='done').length;
+    gid('s-det').textContent = this.stats.det; gid('s-appr').textContent = this.stats.appr; gid('s-con').textContent = this.stats.con;
+    gid('bstats').textContent = `· bots ${gid('s-bots').textContent} · det ${this.stats.det} · wait ${this.stats.appr} · contained ${this.stats.con}`;
+  }
+};
 function tick(){
-  pX.clearRect(0,0,pC.width,pC.height);
-  dots.forEach(d=>{
-    d.step(); const p=d.pos;
-    const sx=p.x*sc+vx, sy=p.y*sc+vy;
-    pX.beginPath(); pX.arc(sx,sy,d.sz,0,Math.PI*2);
-    pX.fillStyle=d.color; pX.shadowBlur=7; pX.shadowColor=d.color;
-    pX.fill(); pX.shadowBlur=0;
-  });
-  requestAnimationFrame(tick);
+  if (!SIM.running) return;
+  const now = performance.now();
+  const dt = Math.min(0.06, (now - SIM.last)/1000); SIM.last = now;
+  SIM.step(dt);
 }
-tick();
+gid('simbtn').onclick = () => SIM.running ? SIM.stop() : SIM.start();
+gid('log').onclick = () => { const o = gid('log').classList.toggle('open'); gid('logtog').textContent = o ? '▼ less' : '▲ more'; };
 
-window.addEventListener('resize',()=>{ drawGrid(); resizePC(); resetView(); });
+/* ============================================================
+   BACKGROUND
+   ============================================================ */
+function drawBg(){
+  const c = gid('bg'), x = c.getContext('2d'); c.width = innerWidth*devicePixelRatio; c.height = innerHeight*devicePixelRatio;
+  x.scale(devicePixelRatio, devicePixelRatio);
+  const g = x.createRadialGradient(innerWidth/2, innerHeight*0.45, 50, innerWidth/2, innerHeight*0.45, Math.max(innerWidth,innerHeight)*0.7);
+  g.addColorStop(0,'#04182a'); g.addColorStop(1,'#020b14'); x.fillStyle=g; x.fillRect(0,0,innerWidth,innerHeight);
+  x.fillStyle='rgba(0,200,255,.10)';
+  for (let i=0;i<innerWidth;i+=28) for (let j=0;j<innerHeight;j+=28) x.fillRect(i,j,1.2,1.2);
+}
+
+/* ============================================================
+   BOOT
+   ============================================================ */
+let lastPhone = null;
+function onResize(){ drawBg(); const ph = innerWidth<760; if (ph!==lastPhone){ lastPhone=ph; build(); } else fit(); }
+window.addEventListener('resize', onResize);
+onResize();
+const qs = new URLSearchParams(location.search);
+if (qs.get('panel')) openPanel(qs.get('panel'));
+if (qs.get('demo')==='1') SIM.start();
 </script>
 </body>
 </html>
